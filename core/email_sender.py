@@ -334,7 +334,7 @@ def build_html_body(idea, results):
                               margin-bottom:15px;">
                         Your full PDF report is attached to this email.
                     </p>
-                    <a href="http://localhost:5000"
+                    <a href="{Config.BASE_URL}"
                        style="background:#00e5ff; color:#0a1628;
                               font-weight:700; padding:14px 35px;
                               border-radius:50px; text-decoration:none;
@@ -443,7 +443,7 @@ def send_welcome_email(recipient_email):
         ✅ Niche opportunities
         ✅ Professional PDF reports
 
-        Visit: http://localhost:5000
+        Visit: {Config.BASE_URL}
 
         -- MarketMind AI Team
         """, "plain")
