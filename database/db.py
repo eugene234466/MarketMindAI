@@ -1,314 +1,289 @@
 # ============================================================
-# DATABASE/DB.PY — FULL UPDATED VERSION
-# Added users table + auth functions
-# Fixed persistence with Railway volumes
+# DATABASE/DB.PY — PostgreSQL Version for Railway
+# Uses SQLAlchemy for better PostgreSQL compatibility
 # ============================================================
 
-import sqlite3
+import os
 import json
 import bcrypt
-import os
 from datetime import datetime
+from sqlalchemy import create_engine, text, Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.pool import NullPool
 from config import Config
 
+# Get database URL from environment
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-# ── 1. INITIALIZE DATABASE ──────────────────────────────────
+# Fix for Railway's PostgreSQL URL (if it starts with postgres://)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Create engine and session
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=NullPool,  # Disable pooling for simplicity
+    echo=False
+)
+SessionLocal = sessionmaker(bind=engine)
+Base = declarative_base()
+
+
+# ── 1. DEFINE MODELS ────────────────────────────────────────
+
+class User(Base):
+    __tablename__ = 'users'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    password = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    researches = relationship("Research", back_populates="user")
+
+
+class Research(Base):
+    __tablename__ = 'research_history'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    idea = Column(String, nullable=False)
+    ai_insights = Column(JSON, default={})
+    market_data = Column(JSON, default={})
+    competitors = Column(JSON, default=[])
+    sales_forecast = Column(JSON, default={})
+    niches = Column(JSON, default=[])
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="researches")
+    reports = relationship("Report", back_populates="research")
+
+
+class Report(Base):
+    __tablename__ = 'reports'
+    
+    id = Column(Integer, primary_key=True)
+    research_id = Column(Integer, ForeignKey('research_history.id'))
+    pdf_path = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    research = relationship("Research", back_populates="reports")
+
+
+# ── 2. INITIALIZE DATABASE ──────────────────────────────────
 def init_db(app):
     with app.app_context():
-        # Ensure database directory exists
-        db_dir = os.path.dirname(Config.DATABASE_PATH)
-        if db_dir and not os.path.exists(db_dir):
-            os.makedirs(db_dir, exist_ok=True)
-            print(f"📁 Created database directory: {db_dir}")
-        
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        # ── EXISTING TABLES ──────────────────────────────────
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS research_history (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id         INTEGER,
-                idea            TEXT NOT NULL,
-                ai_insights     TEXT,
-                market_data     TEXT,
-                competitors     TEXT,
-                sales_forecast  TEXT,
-                niches          TEXT,
-                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS reports (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                research_id     INTEGER,
-                pdf_path        TEXT,
-                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (research_id) REFERENCES research_history(id)
-            )
-        """)
-
-        # ── NEW USERS TABLE ───────────────────────────────────
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                name            TEXT NOT NULL,
-                email           TEXT UNIQUE NOT NULL,
-                password        TEXT NOT NULL,
-                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        conn.commit()
-        conn.close()
-        print(f"✅ Database initialized successfully at {Config.DATABASE_PATH}")
+        # Create tables
+        Base.metadata.create_all(bind=engine)
+        print("✅ PostgreSQL database initialized successfully")
 
 
-# ── 2. GET CONNECTION ────────────────────────────────────────
-def get_connection():
-    # Create database directory if it doesn't exist (safety check)
-    db_dir = os.path.dirname(Config.DATABASE_PATH)
-    if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
-    
-    conn = sqlite3.connect(Config.DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+# ── 3. GET SESSION ──────────────────────────────────────────
+def get_session():
+    return SessionLocal()
 
 
-# ── 3. USER FUNCTIONS ────────────────────────────────────────
+# ── 4. USER FUNCTIONS ───────────────────────────────────────
 
 def create_user(name, email, password):
+    session = get_session()
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        # ── HASH PASSWORD ────────────────────────────────────
-        # Never store plain text passwords
+        # Hash password
         hashed = bcrypt.hashpw(
             password.encode("utf-8"),
             bcrypt.gensalt()
         ).decode("utf-8")
-
-        cursor.execute("""
-            INSERT INTO users (name, email, password)
-            VALUES (?, ?, ?)
-        """, (name, email, hashed))
-
-        conn.commit()
-        user_id = cursor.lastrowid
-        conn.close()
+        
+        # Create user
+        new_user = User(
+            name=name,
+            email=email,
+            password=hashed
+        )
+        
+        session.add(new_user)
+        session.commit()
+        
+        user_id = new_user.id
         print(f"✅ User created: {email}")
         return user_id
-
-    except sqlite3.IntegrityError:
-        # Email already exists
-        print(f"⚠️ Email already exists: {email}")
-        return None
-
+        
     except Exception as e:
+        session.rollback()
         print(f"❌ Failed to create user: {e}")
         return None
+    finally:
+        session.close()
 
 
 def get_user_by_email(email):
+    session = get_session()
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT * FROM users WHERE email = ?
-        """, (email,))
-
-        row  = cursor.fetchone()
-        conn.close()
-
-        if row:
+        user = session.query(User).filter(User.email == email).first()
+        if user:
             return {
-                "id"        : row["id"],
-                "name"      : row["name"],
-                "email"     : row["email"],
-                "password"  : row["password"],
-                "created_at": row["created_at"]
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "password": user.password,
+                "created_at": user.created_at
             }
         return None
-
     except Exception as e:
         print(f"❌ Failed to get user: {e}")
         return None
+    finally:
+        session.close()
 
 
 def get_user_by_id(user_id):
+    session = get_session()
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT * FROM users WHERE id = ?
-        """, (user_id,))
-
-        row  = cursor.fetchone()
-        conn.close()
-
-        if row:
+        user = session.query(User).filter(User.id == user_id).first()
+        if user:
             return {
-                "id"        : row["id"],
-                "name"      : row["name"],
-                "email"     : row["email"],
-                "created_at": row["created_at"]
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "created_at": user.created_at
             }
         return None
-
     except Exception as e:
         print(f"❌ Failed to get user: {e}")
         return None
+    finally:
+        session.close()
 
 
 def verify_password(plain_password, hashed_password):
-    # Checks if plain password matches the stored hash
     return bcrypt.checkpw(
         plain_password.encode("utf-8"),
         hashed_password.encode("utf-8")
     )
 
 
-# ── 4. SAVE RESEARCH ─────────────────────────────────────────
+# ── 5. SAVE RESEARCH ────────────────────────────────────────
 def save_research(results, user_id=None):
+    session = get_session()
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO research_history
-            (user_id, idea, ai_insights, market_data,
-             competitors, sales_forecast, niches)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_id,
-            results["idea"],
-            json.dumps(results.get("ai_insights",    {})),
-            json.dumps(results.get("market_data",    {})),
-            json.dumps(results.get("competitors",    [])),
-            json.dumps(results.get("sales_forecast", {})),
-            json.dumps(results.get("niches",         []))
-        ))
-
-        conn.commit()
-        research_id = cursor.lastrowid
-        conn.close()
+        new_research = Research(
+            user_id=user_id,
+            idea=results["idea"],
+            ai_insights=results.get("ai_insights", {}),
+            market_data=results.get("market_data", {}),
+            competitors=results.get("competitors", []),
+            sales_forecast=results.get("sales_forecast", {}),
+            niches=results.get("niches", [])
+        )
+        
+        session.add(new_research)
+        session.commit()
+        
+        research_id = new_research.id
         print(f"✅ Research saved with ID: {research_id}")
         return research_id
-
+        
     except Exception as e:
+        session.rollback()
         print(f"❌ Failed to save research: {e}")
         return None
+    finally:
+        session.close()
 
 
-# ── 5. GET HISTORY ───────────────────────────────────────────
+# ── 6. GET HISTORY ──────────────────────────────────────────
 def get_history(user_id=None):
+    session = get_session()
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        # ── FILTER BY USER IF LOGGED IN ──────────────────────
+        query = session.query(Research.id, Research.idea, Research.created_at)
+        
         if user_id:
-            cursor.execute("""
-                SELECT id, idea, created_at
-                FROM research_history
-                WHERE user_id = ?
-                ORDER BY created_at DESC
-            """, (user_id,))
-        else:
-            cursor.execute("""
-                SELECT id, idea, created_at
-                FROM research_history
-                ORDER BY created_at DESC
-            """)
-
-        rows    = cursor.fetchall()
+            query = query.filter(Research.user_id == user_id)
+        
+        results = query.order_by(Research.created_at.desc()).all()
+        
         history = [
             {
-                "id"        : row["id"],
-                "idea"      : row["idea"],
-                "created_at": row["created_at"]
+                "id": r.id,
+                "idea": r.idea,
+                "created_at": r.created_at
             }
-            for row in rows
+            for r in results
         ]
-
-        conn.close()
+        
         print(f"📊 Retrieved {len(history)} history items")
         return history
-
+        
     except Exception as e:
         print(f"❌ Failed to fetch history: {e}")
         return []
+    finally:
+        session.close()
 
 
-# ── 6. GET RESEARCH BY ID ────────────────────────────────────
+# ── 7. GET RESEARCH BY ID ───────────────────────────────────
 def get_research_by_id(research_id):
+    session = get_session()
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT * FROM research_history WHERE id = ?
-        """, (research_id,))
-
-        row = cursor.fetchone()
-        conn.close()
-
-        if row:
+        research = session.query(Research).filter(Research.id == research_id).first()
+        
+        if research:
             return {
-                "id"            : row["id"],
-                "idea"          : row["idea"],
-                "ai_insights"   : json.loads(row["ai_insights"]    or "{}"),
-                "market_data"   : json.loads(row["market_data"]    or "{}"),
-                "competitors"   : json.loads(row["competitors"]    or "[]"),
-                "sales_forecast": json.loads(row["sales_forecast"] or "{}"),
-                "niches"        : json.loads(row["niches"]         or "[]"),
-                "created_at"    : row["created_at"]
+                "id": research.id,
+                "idea": research.idea,
+                "ai_insights": research.ai_insights or {},
+                "market_data": research.market_data or {},
+                "competitors": research.competitors or [],
+                "sales_forecast": research.sales_forecast or {},
+                "niches": research.niches or [],
+                "created_at": research.created_at
             }
         return None
-
+        
     except Exception as e:
         print(f"❌ Failed to fetch research: {e}")
         return None
+    finally:
+        session.close()
 
 
-# ── 7. DELETE RESEARCH ───────────────────────────────────────
+# ── 8. DELETE RESEARCH ──────────────────────────────────────
 def delete_research(research_id):
+    session = get_session()
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            DELETE FROM research_history WHERE id = ?
-        """, (research_id,))
-
-        conn.commit()
-        conn.close()
-        print(f"🗑️ Deleted research ID: {research_id}")
-
+        research = session.query(Research).filter(Research.id == research_id).first()
+        if research:
+            session.delete(research)
+            session.commit()
+            print(f"🗑️ Deleted research ID: {research_id}")
+        
     except Exception as e:
+        session.rollback()
         print(f"❌ Failed to delete research: {e}")
+    finally:
+        session.close()
 
 
-# ── 8. SAVE REPORT PATH ──────────────────────────────────────
+# ── 9. SAVE REPORT PATH ─────────────────────────────────────
 def save_report(research_id, pdf_path):
+    session = get_session()
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO reports (research_id, pdf_path)
-            VALUES (?, ?)
-        """, (research_id, pdf_path))
-
-        conn.commit()
-        conn.close()
+        new_report = Report(
+            research_id=research_id,
+            pdf_path=pdf_path
+        )
+        
+        session.add(new_report)
+        session.commit()
         print(f"📄 Saved report path for research ID: {research_id}")
-
+        
     except Exception as e:
+        session.rollback()
         print(f"❌ Failed to save report: {e}")
+    finally:
+        session.close()
