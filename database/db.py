@@ -1,17 +1,26 @@
-﻿# ============================================================
+# ============================================================
 # DATABASE/DB.PY — FULL UPDATED VERSION
 # Added users table + auth functions
+# Fixed persistence with Railway volumes
 # ============================================================
 
 import sqlite3
 import json
 import bcrypt
+import os
 from datetime import datetime
+from config import Config
 
 
 # ── 1. INITIALIZE DATABASE ──────────────────────────────────
 def init_db(app):
     with app.app_context():
+        # Ensure database directory exists
+        db_dir = os.path.dirname(Config.DATABASE_PATH)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+            print(f"📁 Created database directory: {db_dir}")
+        
         conn   = get_connection()
         cursor = conn.cursor()
 
@@ -54,12 +63,17 @@ def init_db(app):
 
         conn.commit()
         conn.close()
-        print("✅ Database initialized successfully")
+        print(f"✅ Database initialized successfully at {Config.DATABASE_PATH}")
 
 
 # ── 2. GET CONNECTION ────────────────────────────────────────
 def get_connection():
-    conn             = sqlite3.connect("database/research_history.db")
+    # Create database directory if it doesn't exist (safety check)
+    db_dir = os.path.dirname(Config.DATABASE_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+    
+    conn = sqlite3.connect(Config.DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -86,16 +100,16 @@ def create_user(name, email, password):
         conn.commit()
         user_id = cursor.lastrowid
         conn.close()
-        print(f"User created: {email}")
+        print(f"✅ User created: {email}")
         return user_id
 
     except sqlite3.IntegrityError:
         # Email already exists
-        print(f"Email already exists: {email}")
+        print(f"⚠️ Email already exists: {email}")
         return None
 
     except Exception as e:
-        print(f"Failed to create user: {e}")
+        print(f"❌ Failed to create user: {e}")
         return None
 
 
@@ -122,7 +136,7 @@ def get_user_by_email(email):
         return None
 
     except Exception as e:
-        print(f"Failed to get user: {e}")
+        print(f"❌ Failed to get user: {e}")
         return None
 
 
@@ -148,7 +162,7 @@ def get_user_by_id(user_id):
         return None
 
     except Exception as e:
-        print(f"Failed to get user: {e}")
+        print(f"❌ Failed to get user: {e}")
         return None
 
 
@@ -184,11 +198,11 @@ def save_research(results, user_id=None):
         conn.commit()
         research_id = cursor.lastrowid
         conn.close()
-        print(f"Research saved with ID: {research_id}")
+        print(f"✅ Research saved with ID: {research_id}")
         return research_id
 
     except Exception as e:
-        print(f"Failed to save research: {e}")
+        print(f"❌ Failed to save research: {e}")
         return None
 
 
@@ -224,10 +238,11 @@ def get_history(user_id=None):
         ]
 
         conn.close()
+        print(f"📊 Retrieved {len(history)} history items")
         return history
 
     except Exception as e:
-        print(f"Failed to fetch history: {e}")
+        print(f"❌ Failed to fetch history: {e}")
         return []
 
 
@@ -258,7 +273,7 @@ def get_research_by_id(research_id):
         return None
 
     except Exception as e:
-        print(f"Failed to fetch research: {e}")
+        print(f"❌ Failed to fetch research: {e}")
         return None
 
 
@@ -274,9 +289,10 @@ def delete_research(research_id):
 
         conn.commit()
         conn.close()
+        print(f"🗑️ Deleted research ID: {research_id}")
 
     except Exception as e:
-        print(f"Failed to delete research: {e}")
+        print(f"❌ Failed to delete research: {e}")
 
 
 # ── 8. SAVE REPORT PATH ──────────────────────────────────────
@@ -292,6 +308,7 @@ def save_report(research_id, pdf_path):
 
         conn.commit()
         conn.close()
+        print(f"📄 Saved report path for research ID: {research_id}")
 
     except Exception as e:
-        print(f"Failed to save report: {e}")
+        print(f"❌ Failed to save report: {e}")
