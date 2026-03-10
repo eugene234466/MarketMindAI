@@ -1,6 +1,7 @@
 <!-- ============================================================
 RESULTS_LOADING.HTML — Loading Page for Async Analysis
 Shows progress while AI analyzes the idea
+Auto-redirects to dashboard when complete
 ============================================================ -->
 
 {% extends "base.html" %}
@@ -78,6 +79,16 @@ Shows progress while AI analyzes the idea
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
+    
+    .debug-info {
+        background: rgba(0,0,0,0.3);
+        border-radius: 8px;
+        padding: 10px;
+        margin-top: 20px;
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.3);
+        display: none;
+    }
 </style>
 {% endblock %}
 
@@ -113,16 +124,38 @@ Shows progress while AI analyzes the idea
     <button onclick="checkStatus()" class="btn btn-outline-info mt-3" style="border-radius:50px;">
         <i class="fas fa-sync-alt"></i> Refresh Status
     </button>
+    
+    <!-- Debug info (hidden by default) -->
+    <div class="debug-info" id="debugInfo"></div>
 </div>
 
 <script>
     const taskId = "{{ task_id }}";
     let pollInterval;
+    let redirectAttempted = false;
+    let pollCount = 0;
+    
+    // Debug function
+    function showDebug(message) {
+        const debugEl = document.getElementById('debugInfo');
+        debugEl.style.display = 'block';
+        debugEl.innerHTML += '<br>' + new Date().toLocaleTimeString() + ': ' + message;
+    }
     
     async function checkStatus() {
+        pollCount++;
+        
         try {
+            // Show polling indicator
+            if (pollCount > 1) {
+                document.getElementById('statusMessage').innerHTML = 
+                    'Still working... (poll ' + pollCount + ')';
+            }
+            
             const response = await fetch(`/progress/${taskId}`);
             const data = await response.json();
+            
+            console.log("Status update:", data); // Log to browser console
             
             // Update progress bar
             if (data.progress) {
@@ -130,7 +163,11 @@ Shows progress while AI analyzes the idea
             }
             
             // Update status message
-            document.getElementById('statusMessage').innerHTML = data.message || data.status;
+            let statusText = data.message || data.status;
+            if (data.status === 'processing') {
+                statusText = statusText + ' <span class="loading-dots"></span>';
+            }
+            document.getElementById('statusMessage').innerHTML = statusText;
             
             // Update estimated time
             if (data.estimated_remaining) {
@@ -138,10 +175,25 @@ Shows progress while AI analyzes the idea
                     '⏱️ ' + data.estimated_remaining;
             }
             
-            // If complete, redirect to results
-            if (data.status === 'completed') {
+            // If complete, redirect to dashboard with results
+            if (data.status === 'completed' && !redirectAttempted) {
+                redirectAttempted = true;
                 clearInterval(pollInterval);
-                window.location.href = `/get-results/${taskId}`;
+                
+                document.getElementById('statusMessage').innerHTML = 
+                    '✅ Analysis complete! Loading your dashboard...';
+                
+                // Save results to session storage
+                if (data.results) {
+                    sessionStorage.setItem('lastResults', JSON.stringify(data.results));
+                    sessionStorage.setItem('lastIdea', data.results.idea || '');
+                }
+                
+                // Small delay to show completion message
+                setTimeout(() => {
+                    // Redirect to dashboard with task ID
+                    window.location.href = `/dashboard?task=${taskId}&results=loaded`;
+                }, 1000);
             }
             
             // If failed, show error
@@ -151,15 +203,19 @@ Shows progress while AI analyzes the idea
                     '❌ Analysis failed. Please try again.';
                 document.getElementById('statusMessage').style.color = '#ff6b6b';
                 document.getElementById('progressBar').style.width = '0%';
+                document.getElementById('estimatedTime').innerHTML = '';
             }
             
         } catch (error) {
             console.error('Progress check failed:', error);
+            document.getElementById('debugInfo').style.display = 'block';
+            document.getElementById('debugInfo').innerHTML = 
+                'Error: ' + error.message;
         }
     }
     
-    // Start polling every 3 seconds
-    pollInterval = setInterval(checkStatus, 3000);
+    // Start polling every 2 seconds
+    pollInterval = setInterval(checkStatus, 2000);
     
     // Also check immediately
     checkStatus();
@@ -172,5 +228,14 @@ Shows progress while AI analyzes the idea
         // Try to get from URL or default
         document.getElementById('ideaText').innerHTML = 'Your business idea';
     }
+    
+    // Stop polling after 10 minutes (600 seconds = 300 polls at 2s intervals)
+    setTimeout(() => {
+        if (!redirectAttempted) {
+            clearInterval(pollInterval);
+            document.getElementById('statusMessage').innerHTML = 
+                '⚠️ Analysis taking longer than expected. Please refresh the page.';
+        }
+    }, 600000);
 </script>
 {% endblock %}
