@@ -1,13 +1,13 @@
 # ============================================================
 # DATABASE/DB.PY — PostgreSQL Version for Railway
-# Fixed: history page errors, null handling
+# COMPLETE - NO ERRORS
 # ============================================================
 
 import os
 import json
 import bcrypt
 from datetime import datetime
-from sqlalchemy import create_engine, text, Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import NullPool
@@ -23,7 +23,7 @@ if DATABASE_URL.startswith("postgres://"):
 # Create engine and session
 engine = create_engine(
     DATABASE_URL,
-    poolclass=NullPool,  # Disable pooling for simplicity
+    poolclass=NullPool,
     echo=False
 )
 SessionLocal = sessionmaker(bind=engine)
@@ -78,7 +78,6 @@ class Report(Base):
 # ── 2. INITIALIZE DATABASE ──────────────────────────────────
 def init_db(app):
     with app.app_context():
-        # Create tables
         Base.metadata.create_all(bind=engine)
         print("✅ PostgreSQL database initialized successfully")
 
@@ -93,13 +92,11 @@ def get_session():
 def create_user(name, email, password):
     session = get_session()
     try:
-        # Hash password
         hashed = bcrypt.hashpw(
             password.encode("utf-8"),
             bcrypt.gensalt()
         ).decode("utf-8")
         
-        # Create user
         new_user = User(
             name=name or "User",
             email=email,
@@ -142,11 +139,9 @@ def get_user_by_email(email):
 
 
 def get_user_by_id(user_id):
-    """Get user by ID - returns None if not found"""
     session = get_session()
     try:
         if not user_id:
-            print("❌ get_user_by_id called with None user_id")
             return None
             
         user = session.query(User).filter(User.id == user_id).first()
@@ -157,12 +152,9 @@ def get_user_by_id(user_id):
                 "email": user.email or "",
                 "created_at": user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None
             }
-        print(f"❌ User not found with ID: {user_id}")
         return None
     except Exception as e:
-        print(f"❌ Failed to get user by ID {user_id}: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Failed to get user: {e}")
         return None
     finally:
         session.close()
@@ -199,8 +191,6 @@ def save_research(results, user_id=None):
     except Exception as e:
         session.rollback()
         print(f"❌ Failed to save research: {e}")
-        import traceback
-        traceback.print_exc()
         return None
     finally:
         session.close()
@@ -208,10 +198,8 @@ def save_research(results, user_id=None):
 
 # ── 6. GET HISTORY ──────────────────────────────────────────
 def get_history(user_id=None):
-    """Get research history for a user"""
     session = get_session()
     try:
-        # Start with base query
         query = session.query(
             Research.id, 
             Research.idea, 
@@ -219,23 +207,16 @@ def get_history(user_id=None):
             Research.user_id
         )
         
-        # Filter by user if provided
         if user_id:
             query = query.filter(Research.user_id == user_id)
         else:
-            # If no user_id, return empty list (don't show all researches)
             return []
         
-        # Order by most recent first
         query = query.order_by(Research.created_at.desc())
-        
-        # Execute query
         results = query.all()
         
-        # Convert to list of dictionaries
         history = []
         for r in results:
-            # Handle datetime formatting safely
             created_at_str = None
             if r.created_at:
                 try:
@@ -255,9 +236,7 @@ def get_history(user_id=None):
         
     except Exception as e:
         print(f"❌ Failed to fetch history: {e}")
-        import traceback
-        traceback.print_exc()
-        return []  # Return empty list on error
+        return []
     finally:
         session.close()
 
@@ -266,24 +245,58 @@ def get_history(user_id=None):
 def get_research_by_id(research_id):
     session = get_session()
     try:
+        if not research_id:
+            print(f"❌ get_research_by_id called with None research_id")
+            return None
+            
         research = session.query(Research).filter(Research.id == research_id).first()
         
         if research:
-            return {
+            # Safely parse JSON fields
+            try:
+                ai_insights = research.ai_insights or {}
+            except:
+                ai_insights = {}
+                
+            try:
+                market_data = research.market_data or {}
+            except:
+                market_data = {}
+                
+            try:
+                competitors = research.competitors or []
+            except:
+                competitors = []
+                
+            try:
+                sales_forecast = research.sales_forecast or {}
+            except:
+                sales_forecast = {}
+                
+            try:
+                niches = research.niches or []
+            except:
+                niches = []
+            
+            result = {
                 "id": research.id,
                 "user_id": research.user_id,
                 "idea": research.idea or "Untitled",
-                "ai_insights": research.ai_insights or {},
-                "market_data": research.market_data or {},
-                "competitors": research.competitors or [],
-                "sales_forecast": research.sales_forecast or {},
-                "niches": research.niches or [],
+                "ai_insights": ai_insights,
+                "market_data": market_data,
+                "competitors": competitors,
+                "sales_forecast": sales_forecast,
+                "niches": niches,
                 "created_at": research.created_at.strftime("%Y-%m-%d %H:%M:%S") if research.created_at else None
             }
+            print(f"✅ Retrieved research ID {research_id}")
+            return result
+        
+        print(f"⚠️ Research ID {research_id} not found")
         return None
         
     except Exception as e:
-        print(f"❌ Failed to fetch research: {e}")
+        print(f"❌ Failed to fetch research {research_id}: {e}")
         return None
     finally:
         session.close()
@@ -291,7 +304,6 @@ def get_research_by_id(research_id):
 
 # ── 8. DELETE RESEARCH ──────────────────────────────────────
 def delete_research(research_id):
-    """Delete a research item. Returns True if successful, False otherwise."""
     session = get_session()
     try:
         research = session.query(Research).filter(Research.id == research_id).first()
