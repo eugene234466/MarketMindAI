@@ -1,6 +1,6 @@
 # ============================================================
 # ROUTES.PY — Main Application Routes
-# Fixed: delete history functionality
+# Fixed: history page, error handling, debug routes
 # ============================================================
 
 from flask import render_template, request, jsonify, session, redirect, url_for, flash, Blueprint, send_file
@@ -41,6 +41,7 @@ def debug():
             "/history",
             "/health",
             "/debug",
+            "/debug-history",
             "/test",
             "/test-html"
         ],
@@ -51,6 +52,36 @@ def debug():
             "base_url": Config.BASE_URL
         }
     })
+
+@main.route('/debug-history')
+def debug_history():
+    """Debug endpoint for history issues"""
+    if 'user_id' not in session:
+        return jsonify({
+            "error": "Not logged in", 
+            "session": {k: str(v) for k, v in session.items()}
+        }), 401
+    
+    try:
+        from database.db import get_history, get_user_by_id
+        
+        user = get_user_by_id(session['user_id'])
+        researches = get_history(session['user_id'])
+        
+        return jsonify({
+            "success": True,
+            "user": user,
+            "research_count": len(researches) if researches else 0,
+            "research": researches,
+            "session": {k: str(v) for k, v in session.items()}
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc().split('\n')
+        }), 500
 
 @main.route('/test')
 def test():
@@ -143,6 +174,10 @@ def index():
         return redirect(url_for('main.intro'))
     
     user = get_user_by_id(session['user_id'])
+    if not user:
+        session.clear()
+        flash('User not found. Please log in again.', 'warning')
+        return redirect(url_for('main.login'))
     
     # Check if we have results from an analysis
     task_id = request.args.get('task')
@@ -194,7 +229,8 @@ def health_check():
     return jsonify({
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "database": "connected"
+        "database": "connected",
+        "service": "MarketMind AI"
     })
 
 
@@ -238,6 +274,8 @@ def analyze():
         
     except Exception as e:
         print(f"❌ Error queueing analysis: {e}")
+        import traceback
+        traceback.print_exc()
         if request.is_json:
             return jsonify({"error": str(e)}), 500
         flash('Analysis failed. Please try again.', 'danger')
@@ -343,16 +381,41 @@ def download_pdf(filename):
 def history():
     """View research history"""
     if 'user_id' not in session:
+        flash('Please log in to view history', 'warning')
         return redirect(url_for('main.intro'))
     
-    user = get_user_by_id(session['user_id'])
-    researches = get_history(session['user_id'])
-    
-    return render_template(
-        'history.html',
-        user=user,
-        research=researches
-    )
+    try:
+        # Get user info
+        user = get_user_by_id(session['user_id'])
+        if not user:
+            # User not found in database, clear session
+            session.clear()
+            flash('User not found. Please log in again.', 'warning')
+            return redirect(url_for('main.login'))
+        
+        # Get research history
+        researches = get_history(session['user_id'])
+        
+        # Ensure researches is a list
+        if researches is None:
+            researches = []
+        
+        return render_template(
+            'history.html',
+            user=user,
+            research=researches
+        )
+    except Exception as e:
+        print(f"❌ History page error: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Error loading history. Please try again.', 'danger')
+        # Return empty history rather than crashing
+        return render_template(
+            'history.html',
+            user={'id': session.get('user_id'), 'name': 'User', 'email': ''},
+            research=[]
+        )
 
 
 # ── 14. VIEW RESEARCH ───────────────────────────────────────
@@ -362,24 +425,34 @@ def view_research(research_id):
     if 'user_id' not in session:
         return redirect(url_for('main.intro'))
     
-    research = get_research_by_id(research_id)
-    
-    # Check if research exists
-    if not research:
-        flash('Research not found', 'danger')
+    try:
+        research = get_research_by_id(research_id)
+        
+        # Check if research exists
+        if not research:
+            flash('Research not found', 'danger')
+            return redirect(url_for('main.history'))
+        
+        # Check ownership (if user_id is in the research)
+        if research.get('user_id') and research.get('user_id') != session['user_id']:
+            flash('You do not have permission to view this research', 'danger')
+            return redirect(url_for('main.history'))
+        
+        # Get user for template
+        user = get_user_by_id(session['user_id']) or {'name': 'User', 'email': ''}
+        
+        # Render dashboard with results
+        return render_template(
+            'dashboard.html',
+            results=research,
+            user=user
+        )
+    except Exception as e:
+        print(f"❌ View research error: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Error loading research', 'danger')
         return redirect(url_for('main.history'))
-    
-    # Check ownership (if user_id is in the research)
-    if research.get('user_id') and research.get('user_id') != session['user_id']:
-        flash('You do not have permission to view this research', 'danger')
-        return redirect(url_for('main.history'))
-    
-    # Render dashboard with results
-    return render_template(
-        'dashboard.html',
-        results=research,
-        user=get_user_by_id(session['user_id'])
-    )
 
 
 # ── 15. DELETE RESEARCH ─────────────────────────────────────
@@ -677,6 +750,7 @@ def catch_all(path):
             "/history",
             "/health",
             "/debug",
+            "/debug-history",
             "/test",
             "/test-html"
         ]
