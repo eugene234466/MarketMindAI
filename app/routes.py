@@ -652,6 +652,7 @@ def quick_analyze_route():
 @main.route('/report', methods=['POST'])
 def generate_report():
     """Generate PDF report"""
+    print("📄 Report endpoint called")  # Debug log
     try:
         from core.report_generator import generate_pdf
         
@@ -659,29 +660,41 @@ def generate_report():
         results_json = request.form.get('results')
         
         if not idea or not results_json:
+            print(f"Missing data: idea={idea}, results_json={bool(results_json)}")
             return jsonify({"error": "Missing data"}), 400
         
-        results = json.loads(results_json)
+        try:
+            results = json.loads(results_json)
+        except Exception as e:
+            print(f"Error parsing results JSON: {e}")
+            return jsonify({"error": "Invalid results format"}), 400
         
+        print(f"Generating PDF for idea: {idea}")
         pdf_path = generate_pdf(idea, results)
         
         if pdf_path:
+            print(f"PDF generated: {pdf_path}")
             return jsonify({
                 "success": True,
                 "pdf_path": os.path.basename(pdf_path)
             })
         else:
+            print(f"PDF generation failed")
             return jsonify({"error": "PDF generation failed"}), 500
             
     except Exception as e:
         print(f"❌ Report error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
 
 
 # ── 22. SEND EMAIL ──────────────────────────────────────────
 @main.route('/email', methods=['POST'])
 def send_email_report():
     """Email report to user"""
+    print("📧 Email endpoint called")  # Debug log
     try:
         from core.email_sender import send_report
         
@@ -691,34 +704,48 @@ def send_email_report():
         else:
             data = request.form
         
+        print(f"Email data received: {list(data.keys())}")  # Debug log
+        
         email = data.get('email')
         idea = data.get('idea')
         results_json = data.get('results')
         pdf_path = data.get('pdf_path')
         
         if not email or not idea:
+            print(f"Missing email or idea: email={email}, idea={idea}")
             return jsonify({"success": False, "error": "Missing email or idea"}), 400
+        
+        # Validate email format
+        if '@' not in email or '.' not in email:
+            return jsonify({"success": False, "error": "Invalid email format"}), 400
         
         # Parse results if provided
         results = None
         if results_json:
             try:
                 results = json.loads(results_json) if isinstance(results_json, str) else results_json
-            except:
+                print(f"Results parsed successfully")
+            except Exception as e:
+                print(f"Error parsing results: {e}")
                 results = {"idea": idea}
         else:
             results = {"idea": idea}
         
         # Generate PDF if not provided or doesn't exist
         if not pdf_path or not os.path.exists(pdf_path):
+            print(f"Generating new PDF for idea: {idea}")
             from core.report_generator import generate_pdf
             pdf_path = generate_pdf(idea, results)
+            print(f"PDF generated at: {pdf_path}")
         
         if not pdf_path or not os.path.exists(pdf_path):
+            print(f"PDF generation failed")
             return jsonify({"success": False, "error": "PDF generation failed"}), 500
         
         # Send email
+        print(f"Sending email to {email}")
         success = send_report(email, idea, pdf_path, results)
+        print(f"Email send result: {success}")
         
         return jsonify({
             "success": success,
