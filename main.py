@@ -1,7 +1,7 @@
 from app import create_app
 import os
 
-# Create global app variable for gunicorn
+# Create the Flask app
 app = create_app()
 
 if __name__ == "__main__":
