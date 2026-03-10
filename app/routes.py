@@ -1,9 +1,9 @@
 # ============================================================
 # ROUTES.PY — Main Application Routes
-# Updated with dashboard results handling
+# Fixed: delete history functionality
 # ============================================================
 
-from flask import render_template, request, jsonify, session, redirect, url_for, flash, Blueprint
+from flask import render_template, request, jsonify, session, redirect, url_for, flash, Blueprint, send_file
 import os
 import time
 import json
@@ -297,24 +297,45 @@ def get_results(task_id):
 
 
 # ── 12. DOWNLOAD PDF ────────────────────────────────────────
-@main.route('/download/<task_id>', methods=['GET'])
-def download_pdf(task_id):
-    """Download generated PDF"""
-    from flask import send_file
-    
-    status = get_task_status(task_id)
-    if status["status"] == "completed" and status.get("pdf_path"):
-        pdf_path = status["pdf_path"]
-        if os.path.exists(pdf_path):
-            return send_file(
-                pdf_path,
-                as_attachment=True,
-                download_name=f"MarketMind_Report_{task_id}.pdf",
-                mimetype='application/pdf'
-            )
-    
-    flash('PDF not found', 'danger')
-    return redirect(url_for('main.index'))
+@main.route('/download/<path:filename>')
+def download_pdf(filename):
+    """Download generated PDF file"""
+    try:
+        # Check multiple possible locations
+        possible_paths = [
+            filename,  # direct path
+            os.path.join(Config.REPORTS_FOLDER, filename),  # in reports folder
+            os.path.join(Config.REPORTS_FOLDER, os.path.basename(filename)),  # just filename in reports
+        ]
+        
+        for pdf_path in possible_paths:
+            if os.path.exists(pdf_path):
+                return send_file(
+                    pdf_path,
+                    as_attachment=True,
+                    download_name=os.path.basename(pdf_path),
+                    mimetype='application/pdf'
+                )
+        
+        # Also check if it's a task_id
+        if not '.' in filename and not '/' in filename:
+            # Might be a task_id
+            from core.tasks import task_pdfs
+            if filename in task_pdfs and task_pdfs[filename] and os.path.exists(task_pdfs[filename]):
+                return send_file(
+                    task_pdfs[filename],
+                    as_attachment=True,
+                    download_name=f"MarketMind_Report_{filename}.pdf",
+                    mimetype='application/pdf'
+                )
+        
+        flash('PDF file not found', 'danger')
+        return redirect(url_for('main.history'))
+        
+    except Exception as e:
+        print(f"❌ Download error: {e}")
+        flash('Error downloading PDF', 'danger')
+        return redirect(url_for('main.history'))
 
 
 # ── 13. HISTORY ─────────────────────────────────────────────
@@ -343,14 +364,21 @@ def view_research(research_id):
     
     research = get_research_by_id(research_id)
     
-    # Check ownership
-    if not research or research.get('user_id') != session['user_id']:
+    # Check if research exists
+    if not research:
         flash('Research not found', 'danger')
         return redirect(url_for('main.history'))
     
+    # Check ownership (if user_id is in the research)
+    if research.get('user_id') and research.get('user_id') != session['user_id']:
+        flash('You do not have permission to view this research', 'danger')
+        return redirect(url_for('main.history'))
+    
+    # Render dashboard with results
     return render_template(
         'dashboard.html',
-        results=research
+        results=research,
+        user=get_user_by_id(session['user_id'])
     )
 
 
@@ -359,16 +387,35 @@ def view_research(research_id):
 def delete_research_route(research_id):
     """Delete a research item"""
     if 'user_id' not in session:
-        return redirect(url_for('main.intro'))
+        flash('Please log in first', 'warning')
+        return redirect(url_for('main.login'))
     
-    research = get_research_by_id(research_id)
-    
-    # Check ownership
-    if research and research.get('user_id') == session['user_id']:
-        delete_research(research_id)
-        flash('Research deleted successfully', 'success')
-    else:
-        flash('Research not found', 'danger')
+    try:
+        # Get the research to check ownership
+        research = get_research_by_id(research_id)
+        
+        # Check if research exists
+        if not research:
+            flash('Research not found', 'danger')
+            return redirect(url_for('main.history'))
+        
+        # Check ownership
+        if research.get('user_id') and research.get('user_id') != session['user_id']:
+            flash('You do not have permission to delete this research', 'danger')
+            return redirect(url_for('main.history'))
+        
+        # Delete the research
+        success = delete_research(research_id)
+        
+        if success:
+            flash('Research deleted successfully', 'success')
+            print(f"✅ Deleted research ID: {research_id}")
+        else:
+            flash('Failed to delete research', 'danger')
+        
+    except Exception as e:
+        print(f"❌ Delete error: {e}")
+        flash('Error deleting research', 'danger')
     
     return redirect(url_for('main.history'))
 
@@ -565,33 +612,51 @@ def send_email_report():
     try:
         from core.email_sender import send_report
         
-        email = request.form.get('email')
-        idea = request.form.get('idea')
-        results_json = request.form.get('results')
+        # Handle both JSON and form data
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form
         
-        if not email or not idea or not results_json:
-            return jsonify({"error": "Missing data"}), 400
+        email = data.get('email')
+        idea = data.get('idea')
+        results_json = data.get('results')
+        pdf_path = data.get('pdf_path')
         
-        results = json.loads(results_json)
+        if not email or not idea:
+            return jsonify({"success": False, "error": "Missing email or idea"}), 400
         
-        # Generate PDF first
-        from core.report_generator import generate_pdf
-        pdf_path = generate_pdf(idea, results)
+        # Parse results if provided
+        results = None
+        if results_json:
+            try:
+                results = json.loads(results_json) if isinstance(results_json, str) else results_json
+            except:
+                results = {"idea": idea}
+        else:
+            results = {"idea": idea}
         
-        if not pdf_path:
-            return jsonify({"error": "PDF generation failed"}), 500
+        # Generate PDF if not provided or doesn't exist
+        if not pdf_path or not os.path.exists(pdf_path):
+            from core.report_generator import generate_pdf
+            pdf_path = generate_pdf(idea, results)
+        
+        if not pdf_path or not os.path.exists(pdf_path):
+            return jsonify({"success": False, "error": "PDF generation failed"}), 500
         
         # Send email
         success = send_report(email, idea, pdf_path, results)
         
         return jsonify({
             "success": success,
-            "error": None if success else "Email sending failed"
+            "message": "Email sent successfully" if success else "Email sending failed"
         })
             
     except Exception as e:
         print(f"❌ Email error: {e}")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ── 23. CATCH-ALL FOR DEBUGGING ─────────────────────────────
