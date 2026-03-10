@@ -418,28 +418,35 @@ def history():
         )
 
 
-# ── 14. VIEW RESEARCH ───────────────────────────────────────
+
+         # ── 14. VIEW RESEARCH ───────────────────────────────────────
 @main.route('/research/<int:research_id>')
 def view_research(research_id):
     """View past research"""
     if 'user_id' not in session:
+        flash('Please log in to view research', 'warning')
         return redirect(url_for('main.intro'))
     
     try:
+        # Get research from database
         research = get_research_by_id(research_id)
         
         # Check if research exists
         if not research:
-            flash('Research not found', 'danger')
+            flash(f'Research ID {research_id} not found', 'danger')
             return redirect(url_for('main.history'))
         
-        # Check ownership (if user_id is in the research)
+        # Check ownership
         if research.get('user_id') and research.get('user_id') != session['user_id']:
             flash('You do not have permission to view this research', 'danger')
             return redirect(url_for('main.history'))
         
         # Get user for template
-        user = get_user_by_id(session['user_id']) or {'name': 'User', 'email': ''}
+        user = get_user_by_id(session['user_id'])
+        if not user:
+            user = {'id': session['user_id'], 'name': 'User', 'email': ''}
+        
+        print(f"✅ Loading research {research_id} for user {session['user_id']}")
         
         # Render dashboard with results
         return render_template(
@@ -447,13 +454,11 @@ def view_research(research_id):
             results=research,
             user=user
         )
+        
     except Exception as e:
-        print(f"❌ View research error: {e}")
-        import traceback
-        traceback.print_exc()
-        flash('Error loading research', 'danger')
+        print(f"❌ View research error for ID {research_id}: {e}")
+        flash('Error loading research. Please try again.', 'danger')
         return redirect(url_for('main.history'))
-
 
 # ── 15. DELETE RESEARCH ─────────────────────────────────────
 @main.route('/history/delete/<int:research_id>', methods=['POST'])
