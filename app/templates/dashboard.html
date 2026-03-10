@@ -1,68 +1,124 @@
 {% block extra_scripts %}
 <script>
-    const resultsData = {{ results | tojson | safe }};
-
-    // ── TRENDS CHART ─────────────────────────────────────────
-    const td = resultsData.market_data.trends;
-    if (td && td.dates && td.dates.length > 0) {
-        Plotly.newPlot("trendsChart", [{
-            x        : td.dates,
-            y        : td.values,
-            type     : "scatter",
-            mode     : "lines+markers",
-            line     : { color: "#00e5ff", width: 3, shape: "spline" },
-            fill     : "tozeroy",
-            fillcolor: "rgba(0,229,255,0.08)",
-            marker   : { color: "#00e5ff", size: 4 }
-        }], {
-            paper_bgcolor: "transparent",
-            plot_bgcolor : "transparent",
-            font  : { color: "#ffffff", family: "Inter" },
-            xaxis : { gridcolor: "rgba(255,255,255,0.07)", zeroline: false },
-            yaxis : { gridcolor: "rgba(255,255,255,0.07)", zeroline: false },
-            margin: { t: 15, b: 40, l: 40, r: 15 },
-            hoverlabel: { bgcolor: "#0d1f38", bordercolor: "#00e5ff" }
-        }, { responsive: true, displayModeBar: false });
-    } else {
-        document.getElementById("trendsChart").innerHTML =
-            "<div class='empty-section'><i class='fas fa-chart-line fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No trend data available for this keyword</p></div>";
+    // Wait for DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded, checking for Plotly...");
+        
+        // Check if Plotly is loaded
+        if (typeof Plotly === 'undefined') {
+            console.log("Plotly not found, waiting for it to load...");
+            
+            // Wait for Plotly to load (it should be in head)
+            const checkPlotly = setInterval(function() {
+                if (typeof Plotly !== 'undefined') {
+                    console.log("Plotly loaded, initializing charts...");
+                    clearInterval(checkPlotly);
+                    initializeCharts();
+                }
+            }, 100);
+            
+            // Timeout after 5 seconds
+            setTimeout(function() {
+                clearInterval(checkPlotly);
+                if (typeof Plotly === 'undefined') {
+                    console.error("Plotly failed to load");
+                    showChartError();
+                }
+            }, 5000);
+        } else {
+            console.log("Plotly already loaded");
+            initializeCharts();
+        }
+    });
+    
+    function showChartError() {
+        const trendsEl = document.getElementById("trendsChart");
+        const salesEl = document.getElementById("salesChart");
+        
+        if (trendsEl) {
+            trendsEl.innerHTML = "<div class='empty-section'><i class='fas fa-chart-line fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>Chart library failed to load. Please refresh the page.</p></div>";
+        }
+        if (salesEl) {
+            salesEl.innerHTML = "<div class='empty-section'><i class='fas fa-dollar-sign fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>Chart library failed to load. Please refresh the page.</p></div>";
+        }
     }
-
-    // ── SALES CHART ──────────────────────────────────────────
-    const sf = resultsData.sales_forecast;
-    if (sf && sf.months && sf.months.length > 0) {
-        Plotly.newPlot("salesChart", [
-            {
-                x: sf.months, y: sf.revenue, type: "bar", name: "Revenue",
-                marker: { color: "rgba(0,229,255,0.65)", line: { color: "#00e5ff", width: 1 } }
-            },
-            {
-                x: sf.months, y: sf.trend, type: "scatter", mode: "lines", name: "Trend",
-                line: { color: "#00ff64", width: 2, dash: "dot" }
+    
+    function initializeCharts() {
+        console.log("Initializing charts with data...");
+        const resultsData = {{ results | tojson | safe }};
+        
+        // ── TRENDS CHART ─────────────────────────────────────────
+        try {
+            const td = resultsData.market_data && resultsData.market_data.trends;
+            if (td && td.dates && td.dates.length > 0) {
+                Plotly.newPlot("trendsChart", [{
+                    x        : td.dates,
+                    y        : td.values,
+                    type     : "scatter",
+                    mode     : "lines+markers",
+                    line     : { color: "#00e5ff", width: 3, shape: "spline" },
+                    fill     : "tozeroy",
+                    fillcolor: "rgba(0,229,255,0.08)",
+                    marker   : { color: "#00e5ff", size: 4 }
+                }], {
+                    paper_bgcolor: "transparent",
+                    plot_bgcolor : "transparent",
+                    font  : { color: "#ffffff", family: "Inter" },
+                    xaxis : { gridcolor: "rgba(255,255,255,0.07)", zeroline: false },
+                    yaxis : { gridcolor: "rgba(255,255,255,0.07)", zeroline: false },
+                    margin: { t: 15, b: 40, l: 40, r: 15 },
+                    hoverlabel: { bgcolor: "#0d1f38", bordercolor: "#00e5ff" }
+                }, { responsive: true, displayModeBar: false });
+                console.log("Trends chart rendered");
+            } else {
+                document.getElementById("trendsChart").innerHTML = 
+                    "<div class='empty-section'><i class='fas fa-chart-line fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No trend data available</p></div>";
             }
-        ], {
-            paper_bgcolor: "transparent",
-            plot_bgcolor : "transparent",
-            font  : { color: "#ffffff", family: "Inter" },
-            xaxis : { gridcolor: "rgba(255,255,255,0.07)" },
-            yaxis : { gridcolor: "rgba(255,255,255,0.07)", tickprefix: "$" },
-            legend: { font: { color: "#ffffff" }, bgcolor: "transparent" },
-            margin: { t: 15, b: 40, l: 60, r: 15 },
-            hoverlabel: { bgcolor: "#0d1f38", bordercolor: "#00e5ff" }
-        }, { responsive: true, displayModeBar: false });
-    } else {
-        document.getElementById("salesChart").innerHTML =
-            "<div class='empty-section'><i class='fas fa-dollar-sign fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No forecast data available</p></div>";
-    }
+        } catch (e) {
+            console.error("Error rendering trends chart:", e);
+        }
 
-    // ── ANIMATE NICHE BARS ───────────────────────────────────
-    setTimeout(() => {
-        document.querySelectorAll(".niche-bar-fill").forEach(bar => {
-            const width = bar.style.width;
-            bar.style.width = "0%";
-            setTimeout(() => { bar.style.width = width; }, 100);
-        });
-    }, 300);
+        // ── SALES CHART ──────────────────────────────────────────
+        try {
+            const sf = resultsData.sales_forecast;
+            if (sf && sf.months && sf.months.length > 0) {
+                Plotly.newPlot("salesChart", [
+                    {
+                        x: sf.months, y: sf.revenue, type: "bar", name: "Revenue",
+                        marker: { color: "rgba(0,229,255,0.65)", line: { color: "#00e5ff", width: 1 } }
+                    },
+                    {
+                        x: sf.months, y: sf.trend, type: "scatter", mode: "lines", name: "Trend",
+                        line: { color: "#00ff64", width: 2, dash: "dot" }
+                    }
+                ], {
+                    paper_bgcolor: "transparent",
+                    plot_bgcolor : "transparent",
+                    font  : { color: "#ffffff", family: "Inter" },
+                    xaxis : { gridcolor: "rgba(255,255,255,0.07)" },
+                    yaxis : { gridcolor: "rgba(255,255,255,0.07)", tickprefix: "$" },
+                    legend: { font: { color: "#ffffff" }, bgcolor: "transparent" },
+                    margin: { t: 15, b: 40, l: 60, r: 15 },
+                    hoverlabel: { bgcolor: "#0d1f38", bordercolor: "#00e5ff" }
+                }, { responsive: true, displayModeBar: false });
+                console.log("Sales chart rendered");
+            } else {
+                document.getElementById("salesChart").innerHTML = 
+                    "<div class='empty-section'><i class='fas fa-dollar-sign fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No forecast data available</p></div>";
+            }
+        } catch (e) {
+            console.error("Error rendering sales chart:", e);
+        }
+
+        // ── ANIMATE NICHE BARS ───────────────────────────────────
+        setTimeout(() => {
+            document.querySelectorAll(".niche-bar-fill").forEach(bar => {
+                const width = bar.style.width;
+                bar.style.width = "0%";
+                setTimeout(() => { bar.style.width = width; }, 100);
+            });
+        }, 300);
+    }
 
     // ── DOWNLOAD PDF ─────────────────────────────────────────
     function downloadPDF() {
@@ -70,7 +126,6 @@
         const btn2 = document.getElementById("pdfBtn2");
         [btn1, btn2].forEach(b => { if (b) { b.innerHTML = "⏳ Generating..."; b.disabled = true; } });
         
-        // Check if we have a direct PDF path from database
         {% if results and results.get('pdf_path') %}
             const pdfPath = "{{ results.pdf_path }}";
             window.open("/download/" + encodeURIComponent(pdfPath), "_blank");
@@ -81,7 +136,6 @@
             return;
         {% endif %}
         
-        // Otherwise generate new PDF
         const payload = new URLSearchParams();
         payload.append("idea",    "{{ results.idea }}");
         payload.append("results", JSON.stringify({{ results | tojson | safe }}));
@@ -92,20 +146,15 @@
             body   : payload
         })
         .then(async response => {
-            // Check if response is OK
             if (!response.ok) {
                 const text = await response.text();
-                console.error("Server response:", text.substring(0, 200));
                 throw new Error(`Server error: ${response.status}`);
             }
-            
-            // Try to parse as JSON
             const text = await response.text();
             try {
                 return JSON.parse(text);
             } catch (e) {
-                console.error("Failed to parse JSON. Response was:", text.substring(0, 200));
-                throw new Error("Server returned HTML instead of JSON. The endpoint might be down.");
+                throw new Error("Invalid server response");
             }
         })
         .then(data => {
@@ -136,7 +185,6 @@
             return; 
         }
         
-        // Simple email validation
         if (!email.includes('@') || !email.includes('.')) {
             alert("Please enter a valid email address");
             return;
@@ -160,20 +208,15 @@
             body   : payload
         })
         .then(async response => {
-            // Check if response is OK
             if (!response.ok) {
                 const text = await response.text();
-                console.error("Server response:", text.substring(0, 200));
                 throw new Error(`Server error: ${response.status}`);
             }
-            
-            // Try to parse as JSON
             const text = await response.text();
             try {
                 return JSON.parse(text);
             } catch (e) {
-                console.error("Failed to parse JSON. Response was:", text.substring(0, 200));
-                throw new Error("Server returned HTML instead of JSON. The endpoint might be down.");
+                throw new Error("Invalid server response");
             }
         })
         .then(data => {
