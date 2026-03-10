@@ -38,7 +38,7 @@ def _set_cached(prompt, result):
 
 
 # ── GEMINI CALL WITH RETRY ───────────────────────────────────
-def call_gemini(prompt, retries=3):
+def call_gemini(prompt, retries=2):
     cached = _get_cached(prompt)
     if cached:
         print("Gemini cache hit")
@@ -60,7 +60,7 @@ def call_gemini(prompt, retries=3):
         except Exception as e:
             error = str(e)
             if "429" in error or "RESOURCE_EXHAUSTED" in error:
-                wait = (attempt + 1) * 20
+                wait = (attempt + 1) * 5
                 print(f"Gemini rate limit — waiting {wait}s "
                       f"(attempt {attempt + 1}/{retries})")
                 time.sleep(wait)
