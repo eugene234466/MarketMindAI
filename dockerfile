@@ -15,6 +15,7 @@ COPY . .
 RUN chmod -R 755 /app/database /app/reports
 
 # Replace the CMD line with:
-CMD gunicorn --timeout 200 --workers 2 "main:create_app()" --bind 0.0.0.0:$PORT
+CMD gunicorn --timeout 120 --workers 2 "main:create_app()" --bind 0.0.0.0:$PORT
+
 
 
