@@ -57,6 +57,7 @@ def _set_cached(prompt, result):
 def call_gemini(prompt, retries=3):
 
     cached = _get_cached(prompt)
+
     if cached:
         print("Gemini cache hit")
         return cached
@@ -76,7 +77,9 @@ def call_gemini(prompt, retries=3):
             )
 
             result = response.text
+
             _set_cached(prompt, result)
+
             return result
 
         except Exception as e:
@@ -86,6 +89,7 @@ def call_gemini(prompt, retries=3):
             if "429" in error or "RESOURCE_EXHAUSTED" in error:
 
                 wait = 2 ** attempt * 5
+
                 print(f"Gemini rate limit — waiting {wait}s")
 
                 time.sleep(wait)
@@ -108,39 +112,32 @@ def analyze_idea(idea):
     print(f'Gemini analyzing: "{idea}"')
 
     prompt = f"""
-You are a professional business analyst.
+You are a professional startup analyst.
 
 Analyze this business idea:
 
 {idea}
 
-Respond ONLY with valid JSON:
+Return ONLY valid JSON:
 
 {{
-    "summary": "2-3 sentence overview of the opportunity",
-    "target_market": "who the ideal customers are",
-    "verdict": "GO",
-    "verdict_reason": "short reason for the verdict",
-    "recommendations": [
-        "recommendation 1",
-        "recommendation 2",
-        "recommendation 3",
-        "recommendation 4",
-        "recommendation 5"
-    ],
-    "key_risks": [
-        "risk 1",
-        "risk 2",
-        "risk 3"
-    ],
-    "pricing": {{
-        "budget": "$X - $Y",
-        "mid": "$X - $Y",
-        "premium": "$X - $Y"
-    }},
-    "competition_level": "Medium",
-    "profit_potential": "High",
-    "market_size": "Large"
+ "summary": "short explanation of the opportunity",
+ "target_market": "who the product is for",
+ "verdict": "GO",
+ "verdict_reason": "why it could succeed",
+ "recommendations": [
+  "recommendation 1",
+  "recommendation 2",
+  "recommendation 3"
+ ],
+ "key_risks": [
+  "risk 1",
+  "risk 2",
+  "risk 3"
+ ],
+ "competition_level": "Low | Medium | High",
+ "profit_potential": "Low | Medium | High",
+ "market_size": "Small | Medium | Large"
 }}
 """
 
@@ -153,5 +150,10 @@ Respond ONLY with valid JSON:
         return json.loads(result)
 
     except Exception as e:
-        print(f"JSON parse error: {e}")
-        return None
+
+        print("JSON parse error:", e)
+
+        return {
+            "summary": result,
+            "verdict": "UNKNOWN"
+        }
