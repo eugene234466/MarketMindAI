@@ -1,4 +1,4 @@
-
+⁸
 # MarketMind
 
 MarketMind is an AI-powered platform that helps entrepreneurs validate business ideas using real market insights. It analyzes a startup idea to estimate market potential, competition level, niche opportunities, and projected sales performance.
@@ -44,12 +44,4 @@ This project is proprietary software.
 
 ---
 
-⚠️ One small note: **Django HTML isn’t actually a thing** — it’s usually called **Jinja templates** when using Flask.
 
-So the **technically correct stack** would be:
-
-```
-Frontend: HTML (Jinja templates)
-```
-
-If you want, I can also give you a **super clean GitHub README that makes MarketMind look like a real SaaS startup project** (the kind that gets stars quickly).
