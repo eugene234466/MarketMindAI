@@ -97,3 +97,61 @@ def call_gemini(prompt, retries=3):
 
     print("Gemini max retries reached")
     return None
+
+
+# ─────────────────────────────
+# ANALYZE IDEA
+# ─────────────────────────────
+
+def analyze_idea(idea):
+
+    print(f'Gemini analyzing: "{idea}"')
+
+    prompt = f"""
+You are a professional business analyst.
+
+Analyze this business idea:
+
+{idea}
+
+Respond ONLY with valid JSON:
+
+{{
+    "summary": "2-3 sentence overview of the opportunity",
+    "target_market": "who the ideal customers are",
+    "verdict": "GO",
+    "verdict_reason": "short reason for the verdict",
+    "recommendations": [
+        "recommendation 1",
+        "recommendation 2",
+        "recommendation 3",
+        "recommendation 4",
+        "recommendation 5"
+    ],
+    "key_risks": [
+        "risk 1",
+        "risk 2",
+        "risk 3"
+    ],
+    "pricing": {{
+        "budget": "$X - $Y",
+        "mid": "$X - $Y",
+        "premium": "$X - $Y"
+    }},
+    "competition_level": "Medium",
+    "profit_potential": "High",
+    "market_size": "Large"
+}}
+"""
+
+    result = call_gemini(prompt)
+
+    if not result:
+        return None
+
+    try:
+        return json.loads(result)
+
+    except Exception as e:
+        print(f"JSON parse error: {e}")
+        return None
