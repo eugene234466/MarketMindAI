@@ -1,0 +1,461 @@
+<!-- ============================================================
+HISTORY.HTML — Research History Page
+Shows all past research with view and delete options
+============================================================ -->
+
+{% extends "base.html" %}
+
+{% block title %}Research History — MarketMind AI{% endblock %}
+
+
+{% block extra_head %}
+<style>
+    /* ── HEADER ────────────────────────────────────────────── */
+    .history-header {
+        display         : flex;
+        justify-content : space-between;
+        align-items     : center;
+        margin-bottom   : 30px;
+    }
+
+    .history-header h2 {
+        font-size   : 2rem;
+        font-weight : 800;
+        color       : #ffffff;
+    }
+
+    .history-header h2 span {
+        color : #00e5ff;
+    }
+
+    .history-count {
+        background    : rgba(0,229,255,0.1);
+        border        : 1px solid rgba(0,229,255,0.3);
+        border-radius : 50px;
+        color         : #00e5ff;
+        font-size     : 0.85rem;
+        font-weight   : 600;
+        padding       : 6px 16px;
+    }
+
+    /* ── HISTORY CARD ──────────────────────────────────────── */
+    .history-card {
+        background    : rgba(255,255,255,0.03);
+        border        : 1px solid rgba(0,229,255,0.15);
+        border-radius : 15px;
+        padding       : 22px 25px;
+        transition    : all 0.3s ease;
+        height        : 100%;
+    }
+
+    .history-card:hover {
+        border-color : rgba(0,229,255,0.4);
+        box-shadow   : 0 8px 30px rgba(0,229,255,0.1);
+        transform    : translateY(-2px);
+    }
+
+    .history-card .idea-title {
+        font-size     : 1rem;
+        font-weight   : 700;
+        color         : #ffffff;
+        margin-bottom : 6px;
+        line-height   : 1.4;
+    }
+
+    .history-card .idea-date {
+        color         : rgba(255,255,255,0.35);
+        font-size     : 0.8rem;
+        margin-bottom : 18px;
+        display       : flex;
+        align-items   : center;
+        gap           : 6px;
+    }
+
+    /* ── BUTTONS ───────────────────────────────────────────── */
+    .btn-view {
+        background      : #00e5ff;
+        color           : #0a1628;
+        font-weight     : 700;
+        font-size       : 0.85rem;
+        padding         : 8px 20px;
+        border-radius   : 50px;
+        text-decoration : none;
+        transition      : all 0.3s ease;
+        display         : inline-flex;
+        align-items     : center;
+        gap             : 6px;
+        border          : none;
+        cursor          : pointer;
+    }
+
+    .btn-view:hover {
+        background : #ffffff;
+        color      : #0a1628;
+        transform  : translateY(-1px);
+    }
+
+    .btn-delete {
+        background    : rgba(255,50,50,0.1);
+        color         : #ff6b6b;
+        font-weight   : 600;
+        font-size     : 0.85rem;
+        padding       : 8px 16px;
+        border-radius : 50px;
+        border        : 1px solid rgba(255,50,50,0.25);
+        cursor        : pointer;
+        transition    : all 0.3s ease;
+        display       : inline-flex;
+        align-items   : center;
+        gap           : 6px;
+    }
+
+    .btn-delete:hover {
+        background   : rgba(255,50,50,0.2);
+        border-color : rgba(255,50,50,0.5);
+        color        : #ff4444;
+        transform    : translateY(-1px);
+    }
+
+    /* ── EMPTY STATE ───────────────────────────────────────── */
+    .empty-state {
+        text-align : center;
+        padding    : 80px 20px;
+    }
+
+    .empty-icon {
+        font-size     : 4rem;
+        color         : rgba(255,255,255,0.1);
+        margin-bottom : 20px;
+    }
+
+    .empty-state h4 {
+        color         : rgba(255,255,255,0.4);
+        font-size     : 1.2rem;
+        margin-bottom : 10px;
+    }
+
+    .empty-state p {
+        color         : rgba(255,255,255,0.25);
+        font-size     : 0.9rem;
+        margin-bottom : 25px;
+    }
+
+    .btn-start {
+        background      : #00e5ff;
+        color           : #0a1628;
+        font-weight     : 700;
+        padding         : 12px 30px;
+        border-radius   : 50px;
+        text-decoration : none;
+        transition      : all 0.3s;
+        display         : inline-block;
+    }
+
+    .btn-start:hover {
+        background : #ffffff;
+        color      : #0a1628;
+        transform  : translateY(-2px);
+    }
+
+    /* ── SEARCH BAR ────────────────────────────────────────── */
+    .search-bar {
+        background    : rgba(255,255,255,0.05);
+        border        : 1px solid rgba(0,229,255,0.2);
+        border-radius : 50px;
+        color         : #ffffff;
+        padding       : 10px 20px;
+        font-size     : 0.9rem;
+        outline       : none;
+        width         : 100%;
+        max-width     : 300px;
+        transition    : all 0.3s;
+    }
+
+    .search-bar:focus {
+        border-color : #00e5ff;
+        box-shadow   : 0 0 15px rgba(0,229,255,0.15);
+    }
+
+    .search-bar::placeholder {
+        color : rgba(255,255,255,0.25);
+    }
+
+    /* ── DELETE CONFIRM MODAL ──────────────────────────────── */
+    .modal-overlay {
+        display         : none;
+        position        : fixed;
+        inset           : 0;
+        background      : rgba(0,0,0,0.7);
+        z-index         : 9999;
+        align-items     : center;
+        justify-content : center;
+        backdrop-filter : blur(4px);
+    }
+
+    .modal-overlay.show {
+        display : flex;
+    }
+
+    .modal-box {
+        background    : #0d1f38;
+        border        : 1px solid rgba(0,229,255,0.2);
+        border-radius : 20px;
+        padding       : 35px;
+        max-width     : 400px;
+        width         : 90%;
+        text-align    : center;
+        animation     : popIn 0.3s ease;
+    }
+
+    @keyframes popIn {
+        from { opacity: 0; transform: scale(0.9); }
+        to   { opacity: 1; transform: scale(1);   }
+    }
+
+    .modal-box .modal-icon {
+        font-size     : 2.5rem;
+        color         : #ff6b6b;
+        margin-bottom : 15px;
+    }
+
+    .modal-box h5 {
+        color         : #ffffff;
+        font-size     : 1.2rem;
+        font-weight   : 700;
+        margin-bottom : 8px;
+    }
+
+    .modal-box p {
+        color         : rgba(255,255,255,0.45);
+        font-size     : 0.9rem;
+        margin-bottom : 25px;
+    }
+
+    .modal-buttons {
+        display : flex;
+        gap     : 12px;
+        justify-content: center;
+    }
+
+    .btn-cancel {
+        background    : rgba(255,255,255,0.07);
+        color         : rgba(255,255,255,0.6);
+        border        : 1px solid rgba(255,255,255,0.1);
+        border-radius : 50px;
+        padding       : 10px 25px;
+        font-weight   : 600;
+        cursor        : pointer;
+        transition    : all 0.3s;
+    }
+
+    .btn-cancel:hover {
+        background : rgba(255,255,255,0.12);
+        color      : #ffffff;
+    }
+
+    .btn-confirm-delete {
+        background    : #ff4444;
+        color         : #ffffff;
+        border        : none;
+        border-radius : 50px;
+        padding       : 10px 25px;
+        font-weight   : 700;
+        cursor        : pointer;
+        transition    : all 0.3s;
+    }
+
+    .btn-confirm-delete:hover {
+        background : #ff2222;
+        transform  : translateY(-1px);
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<!-- ── HEADER ────────────────────────────────────────────────-->
+<div class="history-header">
+    <div>
+        <h2>
+            <i class="fas fa-history" style="color:#00e5ff"></i>
+            Research <span>History</span>
+        </h2>
+        <p class="text-white-50 mb-0 mt-1" style="font-size:0.9rem;">
+            Your past market research analyses
+        </p>
+    </div>
+
+    <div class="d-flex align-items-center gap-3">
+        <!-- Search -->
+        <input type="text"
+               class="search-bar"
+               id="searchInput"
+               placeholder="Search ideas..."
+               oninput="filterHistory()">
+
+        {% if research %}
+        <span class="history-count">
+            {{ research|length }} Analyses
+        </span>
+        {% endif %}
+    </div>
+</div>
+
+
+<!-- ── ERROR MESSAGE ─────────────────────────────────────────-->
+{% if error %}
+<div style="background:rgba(255,200,0,0.1); border:1px solid rgba(255,200,0,0.3);
+            border-radius:12px; padding:15px 20px; color:#ffc800; margin-bottom:20px;">
+    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+</div>
+{% endif %}
+
+
+<!-- ── HISTORY GRID ──────────────────────────────────────────-->
+{% if research %}
+<div class="row g-4" id="historyGrid">
+    {% for item in research %}
+    <div class="col-md-6 col-lg-4 history-item"
+         data-idea="{{ item.idea | lower }}">
+        <div class="history-card">
+
+            <!-- Idea Title -->
+            <div class="idea-title">
+                <i class="fas fa-lightbulb"
+                   style="color:#00e5ff; margin-right:6px;"></i>
+                {{ item.idea }}
+            </div>
+
+            <!-- Date -->
+            <div class="idea-date">
+                <i class="fas fa-clock"></i>
+                {{ item.created_at }}
+            </div>
+
+            <!-- Buttons -->
+            <div class="d-flex align-items-center gap-2">
+
+                <!-- View Report -->
+                <a href="{{ url_for('main.view_research', research_id=item.id) }}"
+                   class="btn-view">
+                    <i class="fas fa-eye"></i> View Report
+                </a>
+
+                <!-- Delete -->
+                <button class="btn-delete"
+                        onclick="confirmDelete({{ item.id }}, '{{ item.idea }}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+
+            </div>
+
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- No results after search -->
+<div id="noResults"
+     style="display:none; text-align:center; padding:40px; color:rgba(255,255,255,0.3);">
+    <i class="fas fa-search fa-2x mb-3"></i>
+    <p>No research found matching your search</p>
+</div>
+
+
+{% else %}
+<!-- ── EMPTY STATE ────────────────────────────────────────── -->
+<div class="empty-state">
+    <div class="empty-icon">
+        <i class="fas fa-inbox"></i>
+    </div>
+    <h4>No Research History Yet</h4>
+    <p>Your market analyses will appear here once you start researching</p>
+    <a href="{{ url_for('main.index') }}" class="btn-start">
+        <i class="fas fa-search"></i> Analyse Your First Idea
+    </a>
+</div>
+{% endif %}
+
+
+<!-- ── DELETE CONFIRM MODAL ──────────────────────────────────-->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-box">
+        <div class="modal-icon">
+            <i class="fas fa-trash-alt"></i>
+        </div>
+        <h5>Delete Research?</h5>
+        <p id="deleteModalText">
+            This will permanently delete this research. This cannot be undone.
+        </p>
+        <div class="modal-buttons">
+            <button class="btn-cancel" onclick="closeModal()">
+                Cancel
+            </button>
+            <form id="deleteForm" method="POST">
+                <button type="submit" class="btn-confirm-delete">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+<script>
+    // ── 1. CONFIRM DELETE MODAL ──────────────────────────────
+    function confirmDelete(id, idea) {
+        const modal = document.getElementById("deleteModal");
+        const form  = document.getElementById("deleteForm");
+        const text  = document.getElementById("deleteModalText");
+
+        // Set form action to delete route
+        form.action = `/history/delete/${id}`;
+
+        // Show idea name in modal
+        text.textContent = `Are you sure you want to delete "${idea}"? This cannot be undone.`;
+
+        // Show modal
+        modal.classList.add("show");
+    }
+
+    function closeModal() {
+        document.getElementById("deleteModal").classList.remove("show");
+    }
+
+    // Close modal on overlay click
+    document.getElementById("deleteModal").addEventListener("click", function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // Close modal on Escape key
+    document.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") closeModal();
+    });
+
+
+    // ── 2. SEARCH / FILTER ───────────────────────────────────
+    function filterHistory() {
+        const query   = document.getElementById("searchInput").value.toLowerCase();
+        const items   = document.querySelectorAll(".history-item");
+        let   visible = 0;
+
+        items.forEach(item => {
+            const idea = item.dataset.idea || "";
+            if (idea.includes(query)) {
+                item.style.display = "block";
+                visible++;
+            } else {
+                item.style.display = "none";
+            }
+        });
+
+        // Show "no results" message
+        document.getElementById("noResults").style.display =
+            visible === 0 ? "block" : "none";
+    }
+</script>
+{% endblock %}
