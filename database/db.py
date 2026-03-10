@@ -1,6 +1,6 @@
 # ============================================================
 # DATABASE/DB.PY — PostgreSQL Version for Railway
-# Uses SQLAlchemy for better PostgreSQL compatibility
+# Fixed: delete_research returns boolean
 # ============================================================
 
 import os
@@ -42,14 +42,14 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    researches = relationship("Research", back_populates="user")
+    researches = relationship("Research", back_populates="user", cascade="all, delete-orphan")
 
 
 class Research(Base):
     __tablename__ = 'research_history'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'))
     idea = Column(String, nullable=False)
     ai_insights = Column(JSON, default={})
     market_data = Column(JSON, default={})
@@ -60,14 +60,14 @@ class Research(Base):
     
     # Relationships
     user = relationship("User", back_populates="researches")
-    reports = relationship("Report", back_populates="research")
+    reports = relationship("Report", back_populates="research", cascade="all, delete-orphan")
 
 
 class Report(Base):
     __tablename__ = 'reports'
     
     id = Column(Integer, primary_key=True)
-    research_id = Column(Integer, ForeignKey('research_history.id'))
+    research_id = Column(Integer, ForeignKey('research_history.id', ondelete='CASCADE'))
     pdf_path = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -211,7 +211,7 @@ def get_history(user_id=None):
             {
                 "id": r.id,
                 "idea": r.idea,
-                "created_at": r.created_at
+                "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else None
             }
             for r in results
         ]
@@ -235,13 +235,14 @@ def get_research_by_id(research_id):
         if research:
             return {
                 "id": research.id,
+                "user_id": research.user_id,
                 "idea": research.idea,
                 "ai_insights": research.ai_insights or {},
                 "market_data": research.market_data or {},
                 "competitors": research.competitors or [],
                 "sales_forecast": research.sales_forecast or {},
                 "niches": research.niches or [],
-                "created_at": research.created_at
+                "created_at": research.created_at.strftime("%Y-%m-%d %H:%M:%S") if research.created_at else None
             }
         return None
         
@@ -254,6 +255,7 @@ def get_research_by_id(research_id):
 
 # ── 8. DELETE RESEARCH ──────────────────────────────────────
 def delete_research(research_id):
+    """Delete a research item. Returns True if successful, False otherwise."""
     session = get_session()
     try:
         research = session.query(Research).filter(Research.id == research_id).first()
@@ -261,10 +263,15 @@ def delete_research(research_id):
             session.delete(research)
             session.commit()
             print(f"🗑️ Deleted research ID: {research_id}")
+            return True
+        else:
+            print(f"⚠️ Research ID {research_id} not found")
+            return False
         
     except Exception as e:
         session.rollback()
         print(f"❌ Failed to delete research: {e}")
+        return False
     finally:
         session.close()
 
@@ -281,9 +288,11 @@ def save_report(research_id, pdf_path):
         session.add(new_report)
         session.commit()
         print(f"📄 Saved report path for research ID: {research_id}")
+        return True
         
     except Exception as e:
         session.rollback()
         print(f"❌ Failed to save report: {e}")
+        return False
     finally:
         session.close()
