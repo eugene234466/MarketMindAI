@@ -1,10 +1,6 @@
 # ============================================================
 # DATABASE/DB.PY — PostgreSQL with Connection Pooling
 # ============================================================
-# Replaces SQLite3. Uses DATABASE_URL from environment.
-# All functions maintain the same API so routes.py needs
-# zero changes.
-# ============================================================
 
 import os
 import json
@@ -14,13 +10,7 @@ import psycopg2.extras
 from psycopg2.pool import ThreadedConnectionPool
 from contextlib import contextmanager
 
-# ── CONNECTION POOL ──────────────────────────────────────────────────────────
-# Railway injects DATABASE_URL automatically when you add a Postgres plugin.
-# Min 1 connection, max 10 (safe for free/starter Railway plan).
-
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-
-# Railway sometimes provides postgres:// but psycopg2 needs postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -28,14 +18,10 @@ _pool: ThreadedConnectionPool = None
 
 
 def get_pool() -> ThreadedConnectionPool:
-    """Lazily create the connection pool on first use."""
     global _pool
     if _pool is None:
         if not DATABASE_URL:
-            raise RuntimeError(
-                "DATABASE_URL environment variable is not set. "
-                "Add a PostgreSQL plugin in Railway and it will be injected automatically."
-            )
+            raise RuntimeError("DATABASE_URL environment variable is not set.")
         _pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=DATABASE_URL)
         print("[DB] Connection pool created.")
     return _pool
@@ -43,7 +29,6 @@ def get_pool() -> ThreadedConnectionPool:
 
 @contextmanager
 def get_conn():
-    """Context manager — borrows a connection from the pool and returns it."""
     pool = get_pool()
     conn = pool.getconn()
     try:
@@ -56,10 +41,9 @@ def get_conn():
         pool.putconn(conn)
 
 
-# ── INIT TABLES ──────────────────────────────────────────────────────────────
+# ── INIT ─────────────────────────────────────────────────────
 
 def init_db():
-    """Create tables if they don't exist. Call once at app startup."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -80,18 +64,73 @@ def init_db():
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
             """)
-            # Index for fast history lookups per user
             cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_research_user_id
-                ON research(user_id);
+                CREATE INDEX IF NOT EXISTS idx_research_user_id ON research(user_id);
             """)
+            # Jobs table — avoids in-memory _jobs dict, works with multiple workers
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id          TEXT PRIMARY KEY,
+                    status      TEXT NOT NULL DEFAULT 'pending',
+                    research_id INTEGER,
+                    error       TEXT,
+                    created_at  TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            # Clean up old jobs (older than 1 hour) on init
+            cur.execute("DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '1 hour';")
     print("[DB] Tables ready.")
 
 
-# ── USER FUNCTIONS ────────────────────────────────────────────────────────────
+# ── JOB FUNCTIONS ────────────────────────────────────────────
+
+def create_job(job_id: str):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO jobs (id, status) VALUES (%s, 'pending') ON CONFLICT (id) DO NOTHING;",
+                (job_id,)
+            )
+
+def complete_job(job_id: str, research_id: int):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET status='done', research_id=%s WHERE id=%s;",
+                (research_id, job_id)
+            )
+
+def fail_job(job_id: str, error: str):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET status='error', error=%s WHERE id=%s;",
+                (error[:500], job_id)
+            )
+
+def get_job(job_id: str) -> dict | None:
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT * FROM jobs WHERE id=%s;", (job_id,))
+                row = cur.fetchone()
+                return dict(row) if row else None
+    except Exception as e:
+        print(f"[DB] get_job error: {e}")
+        return None
+
+def delete_job(job_id: str):
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM jobs WHERE id=%s;", (job_id,))
+    except Exception:
+        pass
+
+
+# ── USER FUNCTIONS ───────────────────────────────────────────
 
 def create_user(name: str, email: str, password: str) -> int | None:
-    """Hash password and insert new user. Returns user id or None on failure."""
     try:
         hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
         with get_conn() as conn:
@@ -103,7 +142,6 @@ def create_user(name: str, email: str, password: str) -> int | None:
                 row = cur.fetchone()
                 return row[0] if row else None
     except psycopg2.errors.UniqueViolation:
-        print(f"[DB] Email already exists: {email}")
         return None
     except Exception as e:
         print(f"[DB] create_user error: {e}")
@@ -111,11 +149,10 @@ def create_user(name: str, email: str, password: str) -> int | None:
 
 
 def get_user_by_email(email: str) -> dict | None:
-    """Return user dict or None."""
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("SELECT * FROM users WHERE email = %s;", (email,))
+                cur.execute("SELECT * FROM users WHERE email=%s;", (email,))
                 return cur.fetchone()
     except Exception as e:
         print(f"[DB] get_user_by_email error: {e}")
@@ -123,11 +160,10 @@ def get_user_by_email(email: str) -> dict | None:
 
 
 def get_user_by_id(user_id: int) -> dict | None:
-    """Return user dict or None."""
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("SELECT * FROM users WHERE id = %s;", (user_id,))
+                cur.execute("SELECT * FROM users WHERE id=%s;", (user_id,))
                 return cur.fetchone()
     except Exception as e:
         print(f"[DB] get_user_by_id error: {e}")
@@ -135,18 +171,15 @@ def get_user_by_id(user_id: int) -> dict | None:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Compare plain password against bcrypt hash."""
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
-    except Exception as e:
-        print(f"[DB] verify_password error: {e}")
+    except Exception:
         return False
 
 
-# ── RESEARCH FUNCTIONS ────────────────────────────────────────────────────────
+# ── RESEARCH FUNCTIONS ───────────────────────────────────────
 
 def save_research(results: dict, user_id: int) -> int | None:
-    """Save a full analysis to the database. Returns the new row id."""
     try:
         idea = results.get("idea", "Unknown")
         with get_conn() as conn:
@@ -163,7 +196,6 @@ def save_research(results: dict, user_id: int) -> int | None:
 
 
 def get_history(user_id: int) -> list[dict]:
-    """Return list of past research summaries for a user, newest first."""
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -175,29 +207,21 @@ def get_history(user_id: int) -> list[dict]:
                     ORDER  BY created_at DESC
                     LIMIT  50;
                 """, (user_id,))
-                rows = cur.fetchall()
-                return [dict(r) for r in rows]
+                return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         print(f"[DB] get_history error: {e}")
         return []
 
 
 def get_research_by_id(research_id: int) -> dict | None:
-    """Return the full results dict for a single research row."""
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(
-                    "SELECT results FROM research WHERE id = %s;",
-                    (research_id,)
-                )
+                cur.execute("SELECT results FROM research WHERE id=%s;", (research_id,))
                 row = cur.fetchone()
                 if row:
-                    # results is already a dict when using JSONB + RealDictCursor
                     data = row["results"]
-                    if isinstance(data, str):
-                        data = json.loads(data)
-                    return data
+                    return data if isinstance(data, dict) else json.loads(data)
                 return None
     except Exception as e:
         print(f"[DB] get_research_by_id error: {e}")
@@ -205,11 +229,10 @@ def get_research_by_id(research_id: int) -> dict | None:
 
 
 def delete_research(research_id: int) -> bool:
-    """Delete a research row. Returns True on success."""
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM research WHERE id = %s;", (research_id,))
+                cur.execute("DELETE FROM research WHERE id=%s;", (research_id,))
                 return cur.rowcount > 0
     except Exception as e:
         print(f"[DB] delete_research error: {e}")
