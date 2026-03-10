@@ -180,93 +180,32 @@ Shows all past research with view and delete options
         color : rgba(255,255,255,0.25);
     }
 
-    /* ── DELETE CONFIRM MODAL ──────────────────────────────── */
-    .modal-overlay {
-        display         : none;
-        position        : fixed;
-        inset           : 0;
-        background      : rgba(0,0,0,0.7);
-        z-index         : 9999;
-        align-items     : center;
-        justify-content : center;
-        backdrop-filter : blur(4px);
+    /* ── TOAST NOTIFICATIONS ───────────────────────────────── */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
     }
 
-    .modal-overlay.show {
-        display : flex;
+    .toast {
+        background: #0d1f38;
+        border: 1px solid #00e5ff;
+        border-radius: 10px;
+        padding: 12px 20px;
+        margin-bottom: 10px;
+        color: white;
+        animation: slideIn 0.3s ease;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.3);
     }
 
-    .modal-box {
-        background    : #0d1f38;
-        border        : 1px solid rgba(0,229,255,0.2);
-        border-radius : 20px;
-        padding       : 35px;
-        max-width     : 400px;
-        width         : 90%;
-        text-align    : center;
-        animation     : popIn 0.3s ease;
-    }
+    .toast.success { border-color: #00ff64; }
+    .toast.error { border-color: #ff4444; }
+    .toast.warning { border-color: #ffc800; }
 
-    @keyframes popIn {
-        from { opacity: 0; transform: scale(0.9); }
-        to   { opacity: 1; transform: scale(1);   }
-    }
-
-    .modal-box .modal-icon {
-        font-size     : 2.5rem;
-        color         : #ff6b6b;
-        margin-bottom : 15px;
-    }
-
-    .modal-box h5 {
-        color         : #ffffff;
-        font-size     : 1.2rem;
-        font-weight   : 700;
-        margin-bottom : 8px;
-    }
-
-    .modal-box p {
-        color         : rgba(255,255,255,0.45);
-        font-size     : 0.9rem;
-        margin-bottom : 25px;
-    }
-
-    .modal-buttons {
-        display : flex;
-        gap     : 12px;
-        justify-content: center;
-    }
-
-    .btn-cancel {
-        background    : rgba(255,255,255,0.07);
-        color         : rgba(255,255,255,0.6);
-        border        : 1px solid rgba(255,255,255,0.1);
-        border-radius : 50px;
-        padding       : 10px 25px;
-        font-weight   : 600;
-        cursor        : pointer;
-        transition    : all 0.3s;
-    }
-
-    .btn-cancel:hover {
-        background : rgba(255,255,255,0.12);
-        color      : #ffffff;
-    }
-
-    .btn-confirm-delete {
-        background    : #ff4444;
-        color         : #ffffff;
-        border        : none;
-        border-radius : 50px;
-        padding       : 10px 25px;
-        font-weight   : 700;
-        cursor        : pointer;
-        transition    : all 0.3s;
-    }
-
-    .btn-confirm-delete:hover {
-        background : #ff2222;
-        transform  : translateY(-1px);
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
     }
 </style>
 {% endblock %}
@@ -296,20 +235,24 @@ Shows all past research with view and delete options
 
         {% if research %}
         <span class="history-count">
-            {{ research|length }} Analyses
+            {{ research|length }} Analysis{% if research|length != 1 %}s{% endif %}
         </span>
         {% endif %}
     </div>
 </div>
 
 
-<!-- ── ERROR MESSAGE ─────────────────────────────────────────-->
-{% if error %}
-<div style="background:rgba(255,200,0,0.1); border:1px solid rgba(255,200,0,0.3);
-            border-radius:12px; padding:15px 20px; color:#ffc800; margin-bottom:20px;">
-    <i class="fas fa-exclamation-triangle"></i> {{ error }}
-</div>
-{% endif %}
+<!-- ── FLASH MESSAGES ───────────────────────────────────────-->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="toast {{ category }}" id="flash-{{ loop.index }}">
+            <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
 
 
 <!-- ── HISTORY GRID ──────────────────────────────────────────-->
@@ -342,11 +285,15 @@ Shows all past research with view and delete options
                     <i class="fas fa-eye"></i> View Report
                 </a>
 
-                <!-- Delete -->
-                <button class="btn-delete"
-                        onclick="confirmDelete({{ item.id }}, '{{ item.idea }}')">
-                    <i class="fas fa-trash"></i>
-                </button>
+                <!-- Delete Form -->
+                <form action="{{ url_for('main.delete_research_route', research_id=item.id) }}" 
+                      method="POST" 
+                      style="display: inline;"
+                      onsubmit="return confirmDelete('{{ item.idea|escapejs }}');">
+                    <button type="submit" class="btn-delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
 
             </div>
 
@@ -377,71 +324,34 @@ Shows all past research with view and delete options
 </div>
 {% endif %}
 
-
-<!-- ── DELETE CONFIRM MODAL ──────────────────────────────────-->
-<div class="modal-overlay" id="deleteModal">
-    <div class="modal-box">
-        <div class="modal-icon">
-            <i class="fas fa-trash-alt"></i>
-        </div>
-        <h5>Delete Research?</h5>
-        <p id="deleteModalText">
-            This will permanently delete this research. This cannot be undone.
-        </p>
-        <div class="modal-buttons">
-            <button class="btn-cancel" onclick="closeModal()">
-                Cancel
-            </button>
-            <form id="deleteForm" method="POST">
-                <button type="submit" class="btn-confirm-delete">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-            </form>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 
 {% block extra_scripts %}
 <script>
-    // ── 1. CONFIRM DELETE MODAL ──────────────────────────────
-    function confirmDelete(id, idea) {
-        const modal = document.getElementById("deleteModal");
-        const form  = document.getElementById("deleteForm");
-        const text  = document.getElementById("deleteModalText");
-
-        // Set form action to delete route
-        form.action = `/history/delete/${id}`;
-
-        // Show idea name in modal
-        text.textContent = `Are you sure you want to delete "${idea}"? This cannot be undone.`;
-
-        // Show modal
-        modal.classList.add("show");
+    // ── 1. CONFIRM DELETE FUNCTION ───────────────────────────
+    function confirmDelete(idea) {
+        return confirm(`Are you sure you want to delete "${idea}"?\nThis action cannot be undone.`);
     }
 
-    function closeModal() {
-        document.getElementById("deleteModal").classList.remove("show");
-    }
-
-    // Close modal on overlay click
-    document.getElementById("deleteModal").addEventListener("click", function(e) {
-        if (e.target === this) closeModal();
+    // ── 2. AUTO-DISMISS FLASH MESSAGES ───────────────────────
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-dismiss flash messages after 5 seconds
+        const toasts = document.querySelectorAll('.toast');
+        toasts.forEach((toast, index) => {
+            setTimeout(() => {
+                toast.style.transition = 'opacity 0.5s ease';
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 500);
+            }, 5000 + (index * 1000)); // Stagger dismissals
+        });
     });
 
-    // Close modal on Escape key
-    document.addEventListener("keydown", function(e) {
-        if (e.key === "Escape") closeModal();
-    });
-
-
-    // ── 2. SEARCH / FILTER ───────────────────────────────────
+    // ── 3. SEARCH / FILTER FUNCTION ──────────────────────────
     function filterHistory() {
-        const query   = document.getElementById("searchInput").value.toLowerCase();
-        const items   = document.querySelectorAll(".history-item");
-        let   visible = 0;
+        const query = document.getElementById("searchInput").value.toLowerCase().trim();
+        const items = document.querySelectorAll(".history-item");
+        let visible = 0;
 
         items.forEach(item => {
             const idea = item.dataset.idea || "";
@@ -454,8 +364,52 @@ Shows all past research with view and delete options
         });
 
         // Show "no results" message
-        document.getElementById("noResults").style.display =
-            visible === 0 ? "block" : "none";
+        const noResults = document.getElementById("noResults");
+        if (noResults) {
+            noResults.style.display = visible === 0 ? "block" : "none";
+        }
+
+        // Update count if visible
+        const countSpan = document.querySelector('.history-count');
+        if (countSpan) {
+            if (query === '') {
+                countSpan.textContent = '{{ research|length }} Analysis{% if research|length != 1 %}s{% endif %}';
+            } else {
+                countSpan.textContent = visible + ' result' + (visible !== 1 ? 's' : '');
+            }
+        }
     }
+
+    // ── 4. ESCAPE JS FOR CONFIRM DIALOG ──────────────────────
+    // This filter is used in the template
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            // Close any open modals if we had them
+        }
+    });
+
+    // ── 5. ADD TOAST NOTIFICATION STYLES IF NOT PRESENT ──────
+    const style = document.createElement('style');
+    style.textContent = `
+        .toast {
+            position: relative;
+            overflow: hidden;
+        }
+        .toast::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: rgba(255,255,255,0.2);
+            animation: progress 5s linear forwards;
+        }
+        @keyframes progress {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+    `;
+    document.head.appendChild(style);
 </script>
 {% endblock %}
