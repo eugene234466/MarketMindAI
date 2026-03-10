@@ -14,6 +14,9 @@ class Config:
     ENV                = os.getenv("FLASK_ENV", "development")
     DEBUG              = True
 
+    # ── Base URL for emails (Railway URL) ────────────────────
+    BASE_URL           = os.getenv("BASE_URL", "http://localhost:5000")
+
     # ── Gemini AI ─────────────────────────────────────────────
     GEMINI_API_KEY     = os.getenv("GEMINI_API_KEY", "")
 
