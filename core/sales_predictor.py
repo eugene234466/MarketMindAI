@@ -1,253 +1,204 @@
 # ============================================================
 # CORE/SALES_PREDICTOR.PY — ML Sales Forecasting
-# Uses Scikit-learn + Prophet to predict sales
-# Takes market data as input
-# Returns 12 month revenue forecast
+# Uses scikit-learn only (no Prophet — too heavy for Railway)
+# Polynomial regression + seasonal overlay for realistic curves
 # ============================================================
 
 import numpy as np
-import pandas as pd
 from datetime import datetime, timedelta
 from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import MinMaxScaler
-from prophet import Prophet
-import json
+from sklearn.preprocessing import PolynomialFeatures
 
 
 # ── 1. MAIN FUNCTION ─────────────────────────────────────────
-# Called from routes.py
-# Returns 12 month sales forecast
-def predict_sales(market_data):
+
+def predict_sales(market_data: dict) -> dict:
     try:
-        print(f"💰 Predicting sales...")
+        trend_values = market_data.get("trends", {}).get("values", [])
 
-        # ── STEP 1: EXTRACT TREND VALUES ────────────────────
-        # Get trend values from market data
-        trend_values = market_data.get(
-            "trends", {}
-        ).get("values", [])
-
-        trend_dates  = market_data.get(
-            "trends", {}
-        ).get("dates", [])
-
-        # ── STEP 2: CHOOSE PREDICTION METHOD ────────────────
-        # Use Prophet if we have enough data (52 weeks)
-        # Fall back to Linear Regression if not
-        if len(trend_values) >= 52:
-            forecast = prophet_forecast(
-                trend_dates,
-                trend_values
-            )
-        else:
+        if len(trend_values) >= 12:
+            forecast = polynomial_forecast(trend_values)
+        elif trend_values:
             forecast = linear_forecast(trend_values)
+        else:
+            forecast = growth_curve_forecast(market_data)
 
-        # ── STEP 3: CONVERT TO REVENUE ───────────────────────
-        # Convert trend scores to estimated revenue
-        revenue_forecast = convert_to_revenue(
-            forecast,
-            market_data
-        )
+        revenue = convert_to_revenue(forecast, market_data)
+        months  = generate_month_labels()
 
-        # ── STEP 4: BUILD RESULT OBJECT ──────────────────────
-        result = {
-            "months"      : generate_month_labels(),
-            "revenue"     : revenue_forecast,
-            "trend"       : calculate_trend_line(revenue_forecast),
-            "total_year"  : sum(revenue_forecast),
-            "peak_month"  : get_peak_month(revenue_forecast),
-            "growth_rate" : calculate_growth_rate(revenue_forecast),
-            "summary"     : generate_forecast_summary(revenue_forecast)
+        return {
+            "months"     : months,
+            "revenue"    : revenue,
+            "trend"      : calculate_trend_line(revenue),
+            "total_year" : sum(revenue),
+            "peak_month" : get_peak_month(revenue, months),
+            "growth_rate": calculate_growth_rate(revenue),
+            "summary"    : generate_forecast_summary(revenue),
         }
 
-        print(f"✅ Sales forecast complete")
-        return result
-
     except Exception as e:
-        print(f"❌ Sales prediction failed: {e}")
+        print(f"[sales_predictor] Error: {e}")
         return get_fallback_forecast()
 
 
-# ── 2. PROPHET FORECAST ──────────────────────────────────────
-# Facebook Prophet for time-series forecasting
-# Best for data with seasonal patterns
-def prophet_forecast(dates, values):
+# ── 2. POLYNOMIAL REGRESSION FORECAST ───────────────────────
+
+def polynomial_forecast(values: list, degree: int = 3) -> list:
     try:
-        # ── PREPARE DATA FOR PROPHET ────────────────────────
-        # Prophet requires columns named 'ds' and 'y'
-        df = pd.DataFrame({
-            "ds": pd.to_datetime(dates),
-            "y" : values
-        })
+        X = np.array(range(len(values))).reshape(-1, 1)
+        y = np.array(values, dtype=float)
 
-        # ── INITIALIZE AND FIT MODEL ─────────────────────────
-        model = Prophet(
-            yearly_seasonality  = True,
-            weekly_seasonality  = False,
-            daily_seasonality   = False,
-            changepoint_prior_scale = 0.05  # flexibility of trend
-        )
-        model.fit(df)
+        poly   = PolynomialFeatures(degree=degree)
+        X_poly = poly.fit_transform(X)
 
-        # ── CREATE FUTURE DATAFRAME ──────────────────────────
-        # Predict next 12 months
-        future   = model.make_future_dataframe(
-            periods = 12,
-            freq    = "MS"    # monthly start
-        )
+        model  = LinearRegression()
+        model.fit(X_poly, y)
 
-        # ── GENERATE FORECAST ────────────────────────────────
-        forecast = model.predict(future)
+        future_X      = np.array(range(len(values), len(values) + 12)).reshape(-1, 1)
+        future_X_poly = poly.transform(future_X)
+        predictions   = model.predict(future_X_poly).tolist()
 
-        # ── EXTRACT NEXT 12 MONTHS ───────────────────────────
-        future_only = forecast.tail(12)
-        predictions = future_only["yhat"].tolist()
-
-        # Normalize to 0-100 range
-        predictions = [max(0, min(100, p)) for p in predictions]
-        return predictions
+        predictions = _apply_seasonality(predictions)
+        return [max(0.0, min(100.0, p)) for p in predictions]
 
     except Exception as e:
-        print(f"❌ Prophet forecast failed: {e}")
+        print(f"[polynomial_forecast] {e}")
         return linear_forecast(values)
 
 
 # ── 3. LINEAR REGRESSION FORECAST ───────────────────────────
-# Simple linear regression when data is insufficient
-# for Prophet
-def linear_forecast(values):
+
+def linear_forecast(values: list) -> list:
     try:
         if not values:
-            return [50] * 12
+            return [50.0] * 12
 
-        # ── PREPARE DATA ─────────────────────────────────────
         X = np.array(range(len(values))).reshape(-1, 1)
-        y = np.array(values)
+        y = np.array(values, dtype=float)
 
-        # ── FIT MODEL ────────────────────────────────────────
         model = LinearRegression()
         model.fit(X, y)
 
-        # ── PREDICT NEXT 12 MONTHS ───────────────────────────
-        future_X     = np.array(
-            range(len(values), len(values) + 12)
-        ).reshape(-1, 1)
+        future_X    = np.array(range(len(values), len(values) + 12)).reshape(-1, 1)
+        predictions = model.predict(future_X).tolist()
+        predictions = _apply_seasonality(predictions)
 
-        predictions  = model.predict(future_X).tolist()
-
-        # Clamp between 0 and 100
-        predictions  = [max(0, min(100, p)) for p in predictions]
-        return predictions
+        return [max(0.0, min(100.0, p)) for p in predictions]
 
     except Exception as e:
-        print(f"❌ Linear forecast failed: {e}")
-        return [50] * 12
+        print(f"[linear_forecast] {e}")
+        return [50.0] * 12
 
 
-# ── 4. CONVERT TO REVENUE ────────────────────────────────────
-# Converts trend scores (0-100) to estimated revenue ($)
-# Uses market size and competition level as multipliers
-def convert_to_revenue(forecast, market_data):
+# ── 4. GROWTH CURVE (when no trend data) ────────────────────
+
+def growth_curve_forecast(market_data: dict) -> list:
+    competition = market_data.get("competition_level", "Medium")
+    trend_score = float(market_data.get("trend_score", 5))
+
+    base   = 20 + trend_score * 3
+    growth = {"High": 0.06, "Medium": 0.09, "Low": 0.14}.get(competition, 0.08)
+
+    curve = []
+    v = base
+    for _ in range(12):
+        v = v * (1 + growth)
+        curve.append(max(0.0, min(100.0, v)))
+    return curve
+
+
+# ── 5. SEASONALITY OVERLAY ───────────────────────────────────
+
+def _apply_seasonality(values: list) -> list:
+    import math
+    result = []
+    for i, v in enumerate(values):
+        seasonal = 1 + 0.08 * math.sin((i / 12) * 2 * math.pi - math.pi / 2)
+        result.append(v * seasonal)
+    return result
+
+
+# ── 6. CONVERT TREND SCORES → REVENUE ───────────────────────
+
+def convert_to_revenue(forecast: list, market_data: dict) -> list:
     try:
-        # ── BASE REVENUE MULTIPLIER ──────────────────────────
-        # Based on market size from SerpAPI
-        market_size       = market_data.get("market_size", "N/A")
-        competition_level = market_data.get("competition_level", "Medium")
+        market_size = market_data.get("market_size", "N/A")
+        competition = market_data.get("competition_level", "Medium")
 
-        # Revenue base per trend point
         size_multipliers = {
-            "$10B+"          : 50000,
-            "$1B - $10B"     : 20000,
-            "$100M - $1B"    : 10000,
-            "$10M - $100M"   : 5000,
-            "$1M - $10M"     : 1000,
-            "N/A"            : 2000
+            "$10B+"        : 50000,
+            "$1B - $10B"   : 20000,
+            "$100M - $1B"  : 10000,
+            "$10M - $100M" : 5000,
+            "$1M - $10M"   : 1000,
+            "N/A"          : 2000,
         }
-
-        # Competition reduces your market share
         competition_factors = {
-            "High"   : 0.05,   # you capture 5% of market
-            "Medium" : 0.10,   # you capture 10% of market
-            "Low"    : 0.20    # you capture 20% of market
+            "High"  : 0.05,
+            "Medium": 0.10,
+            "Low"   : 0.20,
         }
 
         base       = size_multipliers.get(market_size, 2000)
-        factor     = competition_factors.get(competition_level, 0.10)
+        factor     = competition_factors.get(competition, 0.10)
         multiplier = base * factor
 
-        # ── APPLY MULTIPLIER TO FORECAST ─────────────────────
-        revenue = [round(score * multiplier) for score in forecast]
-        return revenue
+        return [max(0, round(score * multiplier)) for score in forecast]
 
     except Exception as e:
-        print(f"❌ Revenue conversion failed: {e}")
-        return [5000 * i for i in range(1, 13)]
+        print(f"[convert_to_revenue] {e}")
+        return [round(5000 * (1 + 0.08 * i)) for i in range(12)]
 
 
-# ── 5. GENERATE MONTH LABELS ─────────────────────────────────
-# Returns next 12 month labels for chart x-axis
-def generate_month_labels():
-    months = []
-    now    = datetime.now()
+# ── 7. MONTH LABELS ──────────────────────────────────────────
 
-    for i in range(1, 13):
-        month = now + timedelta(days=30 * i)
-        months.append(month.strftime("%b %Y"))
-
-    return months
+def generate_month_labels() -> list:
+    now = datetime.now()
+    return [(now + timedelta(days=30 * i)).strftime("%b %Y") for i in range(1, 13)]
 
 
-# ── 6. CALCULATE TREND LINE ──────────────────────────────────
-# Smooth trend line overlay for the sales chart
-def calculate_trend_line(revenue):
+# ── 8. TREND LINE ────────────────────────────────────────────
+
+def calculate_trend_line(revenue: list) -> list:
     try:
         X = np.array(range(len(revenue))).reshape(-1, 1)
-        y = np.array(revenue)
-
+        y = np.array(revenue, dtype=float)
         model = LinearRegression()
         model.fit(X, y)
-
-        trend = model.predict(X).tolist()
-        return [round(t) for t in trend]
-
+        return [round(t) for t in model.predict(X).tolist()]
     except:
         return revenue
 
 
-# ── 7. GET PEAK MONTH ────────────────────────────────────────
-# Returns the month with highest predicted revenue
-def get_peak_month(revenue):
+# ── 9. PEAK MONTH ────────────────────────────────────────────
+
+def get_peak_month(revenue: list, months: list) -> str:
     try:
-        months     = generate_month_labels()
-        peak_index = revenue.index(max(revenue))
-        return months[peak_index]
+        return months[revenue.index(max(revenue))]
     except:
         return "N/A"
 
 
-# ── 8. CALCULATE GROWTH RATE ─────────────────────────────────
-# Calculates predicted growth from month 1 to month 12
-def calculate_growth_rate(revenue):
+# ── 10. GROWTH RATE ──────────────────────────────────────────
+
+def calculate_growth_rate(revenue: list) -> str:
     try:
         if not revenue or revenue[0] == 0:
             return "N/A"
-
         growth = ((revenue[-1] - revenue[0]) / revenue[0]) * 100
-        sign   = "+" if growth > 0 else ""
-        return f"{sign}{round(growth)}%"
-
+        return f"+{round(growth)}%" if growth >= 0 else f"{round(growth)}%"
     except:
         return "N/A"
 
 
-# ── 9. GENERATE FORECAST SUMMARY ────────────────────────────
-# Human readable summary of the forecast
-def generate_forecast_summary(revenue):
-    try:
-        total      = sum(revenue)
-        growth     = calculate_growth_rate(revenue)
-        peak       = get_peak_month(revenue)
+# ── 11. SUMMARY ──────────────────────────────────────────────
 
+def generate_forecast_summary(revenue: list) -> str:
+    try:
+        months = generate_month_labels()
+        total  = sum(revenue)
+        growth = calculate_growth_rate(revenue)
+        peak   = get_peak_month(revenue, months)
         return (
             f"Projected annual revenue of ${total:,} "
             f"with {growth} growth. "
@@ -257,22 +208,17 @@ def generate_forecast_summary(revenue):
         return "Sales forecast data unavailable."
 
 
-# ── 10. FALLBACK FORECAST ────────────────────────────────────
-# Returns placeholder forecast if prediction fails
-def get_fallback_forecast():
-    # Generate realistic looking growth curve
-    base     = 5000
-    revenue  = [
-        round(base * (1 + 0.1 * i))
-        for i in range(12)
-    ]
+# ── 12. FALLBACK ─────────────────────────────────────────────
 
+def get_fallback_forecast() -> dict:
+    months  = generate_month_labels()
+    revenue = [round(5000 * (1 + 0.08 * i)) for i in range(12)]
     return {
-        "months"     : generate_month_labels(),
+        "months"     : months,
         "revenue"    : revenue,
         "trend"      : revenue,
         "total_year" : sum(revenue),
-        "peak_month" : generate_month_labels()[-1],
-        "growth_rate": "+110%",
-        "summary"    : "Forecast based on estimated market data."
+        "peak_month" : months[-1],
+        "growth_rate": "+88%",
+        "summary"    : "Forecast based on estimated market data.",
     }
