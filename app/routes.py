@@ -787,3 +787,24 @@ def catch_all(path):
             "/test-html"
         ]
     }), 404
+
+@main.route('/debug-research/<int:research_id>')
+def debug_research(research_id):
+    """Debug endpoint to check research data"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    
+    try:
+        research = get_research_by_id(research_id)
+        return jsonify({
+            "success": True,
+            "research": research,
+            "session": {k: str(v) for k, v in session.items()}
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc().split('\n')
+        }), 500
