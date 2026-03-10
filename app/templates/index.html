@@ -1,0 +1,409 @@
+<!-- ============================================================
+INDEX.HTML — Landing Page
+This is the FIRST page users see when they visit the app
+It contains the idea input form that triggers the pipeline
+Extends base.html so it inherits navbar, footer etc.
+============================================================ -->
+
+{% extends "base.html" %}
+
+{% block title %}MarketMind AI — Type Your Idea{% endblock %}
+
+
+<!-- ── EXTRA HEAD ─────────────────────────────────────────── -->
+{% block extra_head %}
+<style>
+    /* Hero section full height */
+    .hero-section {
+        min-height    : 90vh;
+        display       : flex;
+        align-items   : center;
+        background    : linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%);
+    }
+
+    /* Glowing input box */
+    .idea-input {
+        background    : rgba(255, 255, 255, 0.05);
+        border        : 2px solid #00e5ff;
+        border-radius : 15px;
+        color         : #ffffff;
+        font-size     : 1.1rem;
+        padding       : 20px;
+        width         : 100%;
+        transition    : all 0.3s ease;
+    }
+
+    .idea-input:focus {
+        outline       : none;
+        border-color  : #00e5ff;
+        box-shadow    : 0 0 20px rgba(0, 229, 255, 0.3);
+    }
+
+    /* Analyze button */
+    .btn-analyze {
+        background    : #00e5ff;
+        color         : #0a1628;
+        font-weight   : 700;
+        font-size     : 1.1rem;
+        padding       : 15px 40px;
+        border-radius : 50px;
+        border        : none;
+        width         : 100%;
+        transition    : all 0.3s ease;
+    }
+
+    .btn-analyze:hover {
+        background    : #ffffff;
+        color         : #0a1628;
+        transform     : translateY(-2px);
+        box-shadow    : 0 10px 30px rgba(0, 229, 255, 0.4);
+    }
+
+    /* Feature cards */
+    .feature-card {
+        background    : rgba(255, 255, 255, 0.05);
+        border        : 1px solid rgba(0, 229, 255, 0.2);
+        border-radius : 15px;
+        padding       : 30px;
+        text-align    : center;
+        transition    : all 0.3s ease;
+    }
+
+    .feature-card:hover {
+        border-color  : #00e5ff;
+        transform     : translateY(-5px);
+        box-shadow    : 0 10px 30px rgba(0, 229, 255, 0.2);
+    }
+
+    .feature-icon {
+        font-size     : 2.5rem;
+        color         : #00e5ff;
+        margin-bottom : 15px;
+    }
+
+    /* Loading spinner */
+    .loading-overlay {
+        display          : none;
+        position         : fixed;
+        top              : 0;
+        left             : 0;
+        width            : 100%;
+        height           : 100%;
+        background       : rgba(10, 22, 40, 0.9);
+        z-index          : 9999;
+        justify-content  : center;
+        align-items      : center;
+        flex-direction   : column;
+    }
+
+    .loading-overlay.active {
+        display          : flex;
+    }
+</style>
+{% endblock %}
+
+
+<!-- ── MAIN CONTENT ───────────────────────────────────────── -->
+{% block content %}
+
+<!-- ── 1. HERO SECTION ──────────────────────────────────────-->
+<section class="hero-section">
+    <div class="container">
+        <div class="row justify-content-center text-center">
+            <div class="col-lg-8">
+
+                <!-- Headline -->
+                <h1 class="display-4 fw-bold text-white mb-3">
+                    Type Your Idea.
+                    <span style="color: #00e5ff;">Get Full Market Intelligence.</span>
+                </h1>
+
+                <!-- Subheadline -->
+                <p class="lead text-white-50 mb-5">
+                    MarketMind AI researches the market, analyses competitors,
+                    predicts sales and delivers a full report — automatically.
+                </p>
+
+                <!-- ── IDEA INPUT FORM ───────────────────── -->
+                <form action="/analyze" method="POST" id="analyzeForm">
+
+                    <!-- Text Area for idea input -->
+                    <div class="mb-4">
+                        <textarea
+                            class="idea-input"
+                            name="idea"
+                            id="ideaInput"
+                            rows="4"
+                            placeholder="e.g. I want to sell eco-friendly water bottles to college students in Ghana..."
+                            required>
+                        </textarea>
+                    </div>
+
+                    <!-- Example ideas to help users -->
+                    <div class="mb-4 text-white-50">
+                        <small>
+                            💡 Try:
+                            <span class="example-idea" style="color: #00e5ff; cursor: pointer;">
+                                "Wireless earbuds in West Africa"
+                            </span> |
+                            <span class="example-idea" style="color: #00e5ff; cursor: pointer;">
+                                "Online fitness coaching for women"
+                            </span> |
+                            <span class="example-idea" style="color: #00e5ff; cursor: pointer;">
+                                "Organic skincare in the UK"
+                            </span>
+                        </small>
+                    </div>
+
+                    <!-- Analyze Button -->
+                    <button type="submit" class="btn-analyze">
+                        <i class="fas fa-search"></i>
+                        Analyze My Idea
+                    </button>
+
+                </form>
+
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ── 2. FEATURES SECTION ──────────────────────────────────-->
+<section class="py-5">
+    <div class="container">
+
+        <h2 class="text-center text-white mb-5">
+            What MarketMind AI Does For You
+        </h2>
+
+        <div class="row g-4">
+
+            <!-- Feature 1 -->
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h5 class="text-white">Market Trends</h5>
+                    <p class="text-white-50">
+                        Real-time Google Trends data showing
+                        whether your market is growing or declining
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h5 class="text-white">Competitor Analysis</h5>
+                    <p class="text-white-50">
+                        Automatically identifies your top competitors
+                        and analyses their strengths and weaknesses
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-lightbulb"></i>
+                    </div>
+                    <h5 class="text-white">Niche Opportunities</h5>
+                    <p class="text-white-50">
+                        AI identifies untapped niches and
+                        scores them by profitability potential
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <h5 class="text-white">Sales Predictions</h5>
+                    <p class="text-white-50">
+                        ML-powered sales forecast showing
+                        expected revenue over 12 months
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature 5 -->
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <h5 class="text-white">PDF Report</h5>
+                    <p class="text-white-50">
+                        Professional downloadable report
+                        ready to share with investors or partners
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature 6 -->
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-tachometer-alt"></i>
+                    </div>
+                    <h5 class="text-white">Live Dashboard</h5>
+                    <p class="text-white-50">
+                        Interactive charts and visualizations
+                        to explore your market data in depth
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- ── 3. HOW IT WORKS SECTION ──────────────────────────────-->
+<section class="py-5" style="background: rgba(255,255,255,0.02);">
+    <div class="container">
+
+        <h2 class="text-center text-white mb-5">How It Works</h2>
+
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+
+                <!-- Step 1 -->
+                <div class="d-flex align-items-center mb-4">
+                    <div class="step-number me-4"
+                         style="background:#00e5ff; color:#0a1628;
+                                width:50px; height:50px; border-radius:50%;
+                                display:flex; align-items:center;
+                                justify-content:center; font-weight:700;
+                                font-size:1.2rem; flex-shrink:0;">
+                        1
+                    </div>
+                    <div>
+                        <h5 class="text-white mb-1">Type Your Business Idea</h5>
+                        <p class="text-white-50 mb-0">
+                            Describe your idea in plain English — no forms or filters needed
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="d-flex align-items-center mb-4">
+                    <div class="step-number me-4"
+                         style="background:#00e5ff; color:#0a1628;
+                                width:50px; height:50px; border-radius:50%;
+                                display:flex; align-items:center;
+                                justify-content:center; font-weight:700;
+                                font-size:1.2rem; flex-shrink:0;">
+                        2
+                    </div>
+                    <div>
+                        <h5 class="text-white mb-1">AI Researches Automatically</h5>
+                        <p class="text-white-50 mb-0">
+                            Gemini AI interprets your idea and triggers the full research pipeline
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="d-flex align-items-center mb-4">
+                    <div class="step-number me-4"
+                         style="background:#00e5ff; color:#0a1628;
+                                width:50px; height:50px; border-radius:50%;
+                                display:flex; align-items:center;
+                                justify-content:center; font-weight:700;
+                                font-size:1.2rem; flex-shrink:0;">
+                        3
+                    </div>
+                    <div>
+                        <h5 class="text-white mb-1">Explore Your Dashboard</h5>
+                        <p class="text-white-50 mb-0">
+                            Interactive charts show trends, competitors, niches and forecasts
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="d-flex align-items-center">
+                    <div class="step-number me-4"
+                         style="background:#00e5ff; color:#0a1628;
+                                width:50px; height:50px; border-radius:50%;
+                                display:flex; align-items:center;
+                                justify-content:center; font-weight:700;
+                                font-size:1.2rem; flex-shrink:0;">
+                        4
+                    </div>
+                    <div>
+                        <h5 class="text-white mb-1">Download Your Report</h5>
+                        <p class="text-white-50 mb-0">
+                            Get a professional PDF report ready to share with anyone
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ── 4. LOADING OVERLAY ────────────────────────────────────-->
+<!-- Shows while the AI pipeline is running -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center">
+        <div class="spinner-border text-info mb-4"
+             style="width: 4rem; height: 4rem;">
+        </div>
+        <h4 class="text-white mb-2">Analysing Your Idea...</h4>
+        <p class="text-white-50" id="loadingText">
+            Gemini AI is interpreting your idea
+        </p>
+    </div>
+</div>
+
+
+{% endblock %}
+
+
+<!-- ── EXTRA SCRIPTS ──────────────────────────────────────── -->
+{% block extra_scripts %}
+<script>
+    // ── 1. EXAMPLE IDEA CLICK ───────────────────────────────
+    // Clicking an example idea fills the textarea
+    document.querySelectorAll(".example-idea").forEach(function(el) {
+        el.addEventListener("click", function() {
+            document.getElementById("ideaInput").value = el.innerText;
+        });
+    });
+
+    // ── 2. LOADING OVERLAY ──────────────────────────────────
+    // Shows loading screen when form is submitted
+    document.getElementById("analyzeForm").addEventListener("submit", function() {
+        document.getElementById("loadingOverlay").classList.add("active");
+
+        // Cycles through loading messages
+        const messages = [
+            "Gemini AI is interpreting your idea...",
+            "Researching market trends...",
+            "Analysing competitors...",
+            "Predicting sales performance...",
+            "Identifying niche opportunities...",
+            "Generating your report..."
+        ];
+
+        let i = 0;
+        setInterval(function() {
+            document.getElementById("loadingText").innerText = messages[i];
+            i = (i + 1) % messages.length;
+        }, 2000);
+    });
+</script>
+{% endblock %}

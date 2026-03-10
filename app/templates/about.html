@@ -1,0 +1,144 @@
+<!-- ============================================================
+ABOUT.HTML — About Page
+SerpAPI removed from tech stack
+============================================================ -->
+
+{% extends "base.html" %}
+
+{% block title %}About — MarketMind AI{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+
+    <!-- ── HERO ──────────────────────────────────────────────-->
+    <div class="text-center mb-5">
+        <img src="{{ url_for('static', filename='images/logo2.jpg') }}"
+             height="80" class="mb-4" style="border-radius:15px;
+             box-shadow:0 0 30px rgba(0,229,255,0.3);">
+        <h1 class="text-white fw-bold mb-3">About MarketMind AI</h1>
+        <p class="text-white-50" style="max-width:600px; margin:0 auto; font-size:1.1rem; line-height:1.8;">
+            AI-powered market intelligence for entrepreneurs, startups
+            and investors. Type any business idea and get a full
+            market research report in seconds.
+        </p>
+    </div>
+
+
+    <!-- ── WHAT WE DO ────────────────────────────────────────-->
+    <div class="row g-4 mb-5">
+        {% for item in [
+            ("fa-chart-line",    "Market Trends",       "Real Google Trends data showing 12 months of search interest and momentum for your idea."),
+            ("fa-users",         "Competitor Analysis", "Identifies top competitors, market share estimates, strengths and weaknesses automatically."),
+            ("fa-lightbulb",     "Niche Opportunities", "Scores and ranks profitable sub-niches within your target market so you can focus."),
+            ("fa-dollar-sign",   "Sales Predictions",   "ML-powered 12-month revenue forecast based on real trend and market data."),
+            ("fa-brain",         "AI Insights",         "Powered by Gemini AI for deep analysis, smart recommendations and GO/NO GO verdict."),
+            ("fa-file-pdf",      "PDF Reports",         "Professional PDF reports ready to share with investors, banks or partners.")
+        ] %}
+        <div class="col-md-4">
+            <div class="card-custom p-4 text-center h-100">
+                <i class="fas {{ item[0] }} fa-2x mb-3" style="color:#00e5ff"></i>
+                <h5 class="text-white">{{ item[1] }}</h5>
+                <p class="text-white-50 small">{{ item[2] }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+
+    <!-- ── HOW IT WORKS ──────────────────────────────────────-->
+    <div class="p-5 mb-5"
+         style="background:rgba(255,255,255,0.03);
+                border:1px solid rgba(0,229,255,0.15);
+                border-radius:15px;">
+        <h3 class="text-white text-center mb-5">How It Works</h3>
+        <div class="row g-4 text-center">
+            {% for step in [
+                ("1", "Type Your Idea",    "Enter any business idea or product concept"),
+                ("2", "AI Research",       "Our AI scans Google Trends and ecommerce data"),
+                ("3", "Get Dashboard",     "View interactive charts, competitor tables and niche scores"),
+                ("4", "Download Report",   "Export a professional PDF report to share or save")
+            ] %}
+            <div class="col-md-3">
+                <div style="background:#00e5ff; color:#0a1628;
+                            width:50px; height:50px; border-radius:50%;
+                            display:flex; align-items:center;
+                            justify-content:center; font-weight:800;
+                            font-size:1.3rem; margin:0 auto 15px;">
+                    {{ step[0] }}
+                </div>
+                <h6 class="text-white">{{ step[1] }}</h6>
+                <p class="text-white-50 small">{{ step[2] }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+
+    <!-- ── TECH STACK ─────────────────────────────────────────-->
+    <div class="text-center mb-5">
+        <h3 class="text-white mb-4">Built With</h3>
+        <div class="d-flex flex-wrap justify-content-center gap-3">
+            {% for tech in [
+                "Flask",
+                "Gemini AI",
+                "Google Trends",
+                "BeautifulSoup",
+                "googlesearch-python",
+                "Plotly",
+                "scikit-learn",
+                "fpdf2",
+                "SQLite",
+                "Bootstrap"
+            ] %}
+            <span style="background:rgba(0,229,255,0.1);
+                         border:1px solid rgba(0,229,255,0.3);
+                         color:#00e5ff; padding:8px 20px;
+                         border-radius:50px; font-size:0.9rem;">
+                {{ tech }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+
+
+    <!-- ── COST ───────────────────────────────────────────────-->
+    <div class="text-center mb-5">
+        <h3 class="text-white mb-4">Monthly Running Cost</h3>
+        <div class="row g-3 justify-content-center">
+            {% for item in [
+                ("Gemini AI",             "Free tier / Pay-as-you-go", "00e5ff"),
+                ("Google Trends",         "Always Free",               "00ff64"),
+                ("Web Scraping",          "Always Free",               "00ff64"),
+                ("Gmail SMTP",            "Always Free",               "00ff64")
+            ] %}
+            <div class="col-md-3">
+                <div class="card-custom p-3 text-center">
+                    <div class="text-white small fw-bold mb-1">{{ item[0] }}</div>
+                    <div style="color:#{{ item[2] }}; font-size:0.8rem;">{{ item[1] }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="text-white-50 mt-3 small">
+            Total monthly API cost: <strong style="color:#00ff64;">~GHS 0</strong>
+            until you scale 🇬🇭
+        </p>
+    </div>
+
+
+    <!-- ── CTA ───────────────────────────────────────────────-->
+    <div class="text-center">
+        <a href="{{ url_for('main.index') }}"
+           style="background:#00e5ff; color:#0a1628;
+                  font-weight:700; padding:15px 40px;
+                  border-radius:50px; text-decoration:none;
+                  font-size:1.1rem; display:inline-block;
+                  transition: all 0.3s ease;"
+           onmouseover="this.style.background='#ffffff'"
+           onmouseout="this.style.background='#00e5ff'">
+            <i class="fas fa-search"></i> Start Analysing Your Idea
+        </a>
+    </div>
+
+</div>
+{% endblock %}
