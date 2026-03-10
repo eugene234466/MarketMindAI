@@ -22,7 +22,11 @@ def get_pool() -> ThreadedConnectionPool:
     if _pool is None:
         if not DATABASE_URL:
             raise RuntimeError("DATABASE_URL environment variable is not set.")
-        _pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=DATABASE_URL)
+        _pool = ThreadedConnectionPool(
+            minconn=1, maxconn=10, dsn=DATABASE_URL,
+            keepalives=1, keepalives_idle=30,
+            keepalives_interval=10, keepalives_count=3
+        )
         print("[DB] Connection pool created.")
     return _pool
 
