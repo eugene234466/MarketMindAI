@@ -1,7 +1,6 @@
 <!-- ============================================================
 BASE.HTML — Base Template
-All pages extend this template
-Updated: Added Plotly fallback CDNs
+FIXED: All blocks properly closed
 ============================================================ -->
 
 <!DOCTYPE html>
@@ -35,30 +34,23 @@ Updated: Added Plotly fallback CDNs
         };
         
         function loadPlotlyFallback() {
-            // Try alternate CDN
             var script = document.createElement('script');
             script.src = 'https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js';
             script.onload = function() {
                 console.log('Plotly loaded from fallback CDN');
-                // Dispatch an event that Plotly is loaded
                 window.dispatchEvent(new Event('plotly-loaded'));
             };
             script.onerror = function() {
                 console.error('All Plotly CDNs failed');
-                // Create a dummy Plotly object to prevent errors
                 window.Plotly = {
                     newPlot: function() { 
                         console.warn('Plotly unavailable - charts disabled');
-                        document.querySelectorAll('[id$="Chart"]').forEach(el => {
-                            if (el) el.innerHTML = '<div style="text-align:center; padding:50px; color:rgba(255,255,255,0.3);"><i class="fas fa-chart-line fa-3x mb-3"></i><p>Charts temporarily unavailable</p></div>';
-                        });
                     }
                 };
             };
             document.head.appendChild(script);
         }
         
-        // Check if Plotly loaded successfully
         setTimeout(function() {
             if (typeof Plotly === 'undefined') {
                 console.log('Plotly not detected, loading fallback...');
@@ -670,5 +662,4 @@ Updated: Added Plotly fallback CDNs
 {% block extra_scripts %}{% endblock %}
 
 </body>
-
 </html>
