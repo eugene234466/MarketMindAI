@@ -1,6 +1,6 @@
 # ============================================================
 # ROUTES.PY — Main Application Routes
-# Updated with debug routes and root fixes
+# Updated with dashboard results handling
 # ============================================================
 
 from flask import render_template, request, jsonify, session, redirect, url_for, flash, Blueprint
@@ -143,6 +143,27 @@ def index():
         return redirect(url_for('main.intro'))
     
     user = get_user_by_id(session['user_id'])
+    
+    # Check if we have results from an analysis
+    task_id = request.args.get('task')
+    results_loaded = request.args.get('results')
+    
+    if task_id and results_loaded:
+        # Get the results from the task
+        from core.tasks import get_task_status
+        status = get_task_status(task_id)
+        if status["status"] == "completed" and status.get("results"):
+            # Render dashboard with results
+            return render_template(
+                'dashboard.html', 
+                user=user, 
+                results=status["results"]
+            )
+        elif status["status"] == "processing":
+            # Still processing - redirect back to loading
+            return redirect(url_for('main.results', task_id=task_id))
+    
+    # Regular dashboard without results
     return render_template('index.html', user=user)
 
 
@@ -199,6 +220,9 @@ def analyze():
         
         user_id = session.get('user_id')
         
+        # Save idea to session for loading page
+        session['last_idea'] = idea
+        
         # Queue the analysis (10-minute timeout)
         task_id = queue_analysis(idea, user_id, recipient_email)
         
@@ -223,7 +247,7 @@ def analyze():
 # ── 9. RESULTS PAGE ─────────────────────────────────────────
 @main.route('/results/<task_id>')
 def results(task_id):
-    """Show analysis results page"""
+    """Show analysis results loading page"""
     user = None
     if 'user_id' in session:
         user = get_user_by_id(session['user_id'])
@@ -440,13 +464,43 @@ def get_progress(task_id):
     
     # Add estimated time remaining
     if status["status"] == "processing":
-        status["estimated_remaining"] = "2-5 minutes"
-        status["progress"] = 50
+        # Calculate progress based on time elapsed
+        from core.tasks import task_start_time
+        import time
+        
+        start_time = task_start_time.get(task_id, time.time())
+        elapsed = time.time() - start_time
+        
+        if elapsed < 30:
+            status["message"] = "AI is analysing your idea..."
+            status["progress"] = 20
+        elif elapsed < 60:
+            status["message"] = "Researching market trends..."
+            status["progress"] = 40
+        elif elapsed < 120:
+            status["message"] = "Analysing competitors..."
+            status["progress"] = 60
+        elif elapsed < 180:
+            status["message"] = "Predicting sales performance..."
+            status["progress"] = 80
+        else:
+            status["message"] = "Generating your report..."
+            status["progress"] = 90
+        
+        remaining = max(0, 300 - elapsed)
+        if remaining > 60:
+            status["estimated_remaining"] = f"~{int(remaining/60)} minutes"
+        else:
+            status["estimated_remaining"] = f"~{int(remaining)} seconds"
+    
     elif status["status"] == "queued":
+        status["message"] = "Waiting in queue..."
+        status["progress"] = 5
         status["estimated_remaining"] = "Starting soon..."
-        status["progress"] = 0
+    
     elif status["status"] == "completed":
         status["progress"] = 100
+        status["message"] = "Analysis complete!"
     
     return jsonify(status)
 
