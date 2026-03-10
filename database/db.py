@@ -15,13 +15,14 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-_pool: ThreadedConnectionPool | None = None
+_pool = None
 
 
 def get_pool():
     global _pool
 
     if _pool is None:
+
         if not DATABASE_URL:
             raise RuntimeError("DATABASE_URL not set")
 
@@ -38,22 +39,33 @@ def get_pool():
 
 @contextmanager
 def get_conn():
+
     pool = get_pool()
     conn = pool.getconn()
 
     try:
-        if conn.closed:
+
+        # check connection health
+        if conn.closed != 0:
             conn = psycopg2.connect(DATABASE_URL)
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
 
         yield conn
         conn.commit()
 
     except Exception:
+
         conn.rollback()
         raise
 
     finally:
-        pool.putconn(conn)
+
+        if conn.closed == 0:
+            pool.putconn(conn)
+        else:
+            conn.close()
 
 
 # ─────────────────────────────────────────────
@@ -61,6 +73,7 @@ def get_conn():
 # ─────────────────────────────────────────────
 
 def init_db():
+
     with get_conn() as conn:
         with conn.cursor() as cur:
 
@@ -99,6 +112,7 @@ def init_db():
 def create_user(name, email, password):
 
     try:
+
         hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
         with get_conn() as conn:
@@ -113,10 +127,12 @@ def create_user(name, email, password):
                 return row[0] if row else None
 
     except psycopg2.errors.UniqueViolation:
+
         print(f"[DB] Email exists: {email}")
         return None
 
     except Exception as e:
+
         print(f"[DB] create_user error: {e}")
         return None
 
@@ -124,6 +140,7 @@ def create_user(name, email, password):
 def get_user_by_email(email):
 
     try:
+
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
 
@@ -135,6 +152,7 @@ def get_user_by_email(email):
                 return cur.fetchone()
 
     except Exception as e:
+
         print(f"[DB] get_user_by_email error: {e}")
         return None
 
@@ -142,6 +160,7 @@ def get_user_by_email(email):
 def get_user_by_id(user_id):
 
     try:
+
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
 
@@ -153,6 +172,7 @@ def get_user_by_id(user_id):
                 return cur.fetchone()
 
     except Exception as e:
+
         print(f"[DB] get_user_by_id error: {e}")
         return None
 
@@ -160,9 +180,14 @@ def get_user_by_id(user_id):
 def verify_password(plain, hashed):
 
     try:
-        return bcrypt.checkpw(plain.encode(), hashed.encode())
+
+        return bcrypt.checkpw(
+            plain.encode(),
+            hashed.encode()
+        )
 
     except Exception as e:
+
         print(f"[DB] verify_password error: {e}")
         return False
 
@@ -174,6 +199,7 @@ def verify_password(plain, hashed):
 def save_research(results, user_id):
 
     try:
+
         idea = results.get("idea", "Unknown")
 
         with get_conn() as conn:
@@ -188,6 +214,7 @@ def save_research(results, user_id):
                 return row[0] if row else None
 
     except Exception as e:
+
         print(f"[DB] save_research error: {e}")
         return None
 
@@ -195,12 +222,13 @@ def save_research(results, user_id):
 def get_history(user_id):
 
     try:
+
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
 
                 cur.execute("""
                 SELECT id,idea,created_at,
-                       results->'ai_insights'->>'verdict' AS verdict
+                       results->>'verdict' AS verdict
                 FROM research
                 WHERE user_id=%s
                 ORDER BY created_at DESC
@@ -210,6 +238,7 @@ def get_history(user_id):
                 return [dict(r) for r in cur.fetchall()]
 
     except Exception as e:
+
         print(f"[DB] get_history error: {e}")
         return []
 
@@ -217,6 +246,7 @@ def get_history(user_id):
 def get_research_by_id(research_id):
 
     try:
+
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
 
@@ -228,6 +258,7 @@ def get_research_by_id(research_id):
                 row = cur.fetchone()
 
                 if row:
+
                     data = row["results"]
 
                     if isinstance(data, str):
@@ -238,6 +269,7 @@ def get_research_by_id(research_id):
                 return None
 
     except Exception as e:
+
         print(f"[DB] get_research_by_id error: {e}")
         return None
 
@@ -245,6 +277,7 @@ def get_research_by_id(research_id):
 def delete_research(research_id):
 
     try:
+
         with get_conn() as conn:
             with conn.cursor() as cur:
 
@@ -256,5 +289,6 @@ def delete_research(research_id):
                 return cur.rowcount > 0
 
     except Exception as e:
+
         print(f"[DB] delete_research error: {e}")
         return False
