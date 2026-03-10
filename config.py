@@ -30,9 +30,10 @@ class Config:
     SMTP_PORT          = int(os.getenv("SMTP_PORT", 587))
 
     # ── Database ──────────────────────────────────────────────
-    DATABASE_PATH      = "database/research_history.db"
+    # Use Railway volume path if available, otherwise local path
+    DATABASE_PATH      = os.getenv("DATABASE_PATH", "database/research_history.db")
 
     # ── File Paths ────────────────────────────────────────────
-    REPORTS_FOLDER     = "reports"
+    REPORTS_FOLDER     = os.getenv("REPORTS_FOLDER", "reports")
     RAW_DATA_FOLDER    = "data/raw"
     PROCESSED_FOLDER   = "data/processed"
