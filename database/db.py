@@ -1,6 +1,6 @@
 # ============================================================
 # DATABASE/DB.PY — PostgreSQL Version for Railway
-# Fixed: delete_research returns boolean
+# Fixed: history page errors, null handling
 # ============================================================
 
 import os
@@ -36,7 +36,7 @@ class User(Base):
     __tablename__ = 'users'
     
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, default="User")
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -50,7 +50,7 @@ class Research(Base):
     
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'))
-    idea = Column(String, nullable=False)
+    idea = Column(String, nullable=False, default="Untitled")
     ai_insights = Column(JSON, default={})
     market_data = Column(JSON, default={})
     competitors = Column(JSON, default=[])
@@ -101,7 +101,7 @@ def create_user(name, email, password):
         
         # Create user
         new_user = User(
-            name=name,
+            name=name or "User",
             email=email,
             password=hashed
         )
@@ -128,10 +128,10 @@ def get_user_by_email(email):
         if user:
             return {
                 "id": user.id,
-                "name": user.name,
+                "name": user.name or "User",
                 "email": user.email,
                 "password": user.password,
-                "created_at": user.created_at
+                "created_at": user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None
             }
         return None
     except Exception as e:
@@ -142,19 +142,27 @@ def get_user_by_email(email):
 
 
 def get_user_by_id(user_id):
+    """Get user by ID - returns None if not found"""
     session = get_session()
     try:
+        if not user_id:
+            print("❌ get_user_by_id called with None user_id")
+            return None
+            
         user = session.query(User).filter(User.id == user_id).first()
         if user:
             return {
                 "id": user.id,
-                "name": user.name,
-                "email": user.email,
-                "created_at": user.created_at
+                "name": user.name or "User",
+                "email": user.email or "",
+                "created_at": user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None
             }
+        print(f"❌ User not found with ID: {user_id}")
         return None
     except Exception as e:
-        print(f"❌ Failed to get user: {e}")
+        print(f"❌ Failed to get user by ID {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     finally:
         session.close()
@@ -173,7 +181,7 @@ def save_research(results, user_id=None):
     try:
         new_research = Research(
             user_id=user_id,
-            idea=results["idea"],
+            idea=results.get("idea", "Untitled"),
             ai_insights=results.get("ai_insights", {}),
             market_data=results.get("market_data", {}),
             competitors=results.get("competitors", []),
@@ -191,6 +199,8 @@ def save_research(results, user_id=None):
     except Exception as e:
         session.rollback()
         print(f"❌ Failed to save research: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     finally:
         session.close()
@@ -198,30 +208,56 @@ def save_research(results, user_id=None):
 
 # ── 6. GET HISTORY ──────────────────────────────────────────
 def get_history(user_id=None):
+    """Get research history for a user"""
     session = get_session()
     try:
-        query = session.query(Research.id, Research.idea, Research.created_at)
+        # Start with base query
+        query = session.query(
+            Research.id, 
+            Research.idea, 
+            Research.created_at,
+            Research.user_id
+        )
         
+        # Filter by user if provided
         if user_id:
             query = query.filter(Research.user_id == user_id)
+        else:
+            # If no user_id, return empty list (don't show all researches)
+            return []
         
-        results = query.order_by(Research.created_at.desc()).all()
+        # Order by most recent first
+        query = query.order_by(Research.created_at.desc())
         
-        history = [
-            {
+        # Execute query
+        results = query.all()
+        
+        # Convert to list of dictionaries
+        history = []
+        for r in results:
+            # Handle datetime formatting safely
+            created_at_str = None
+            if r.created_at:
+                try:
+                    created_at_str = r.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    created_at_str = str(r.created_at)
+            
+            history.append({
                 "id": r.id,
-                "idea": r.idea,
-                "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else None
-            }
-            for r in results
-        ]
+                "idea": r.idea or "Untitled",
+                "created_at": created_at_str,
+                "user_id": r.user_id
+            })
         
-        print(f"📊 Retrieved {len(history)} history items")
+        print(f"📊 Retrieved {len(history)} history items for user {user_id}")
         return history
         
     except Exception as e:
         print(f"❌ Failed to fetch history: {e}")
-        return []
+        import traceback
+        traceback.print_exc()
+        return []  # Return empty list on error
     finally:
         session.close()
 
@@ -236,7 +272,7 @@ def get_research_by_id(research_id):
             return {
                 "id": research.id,
                 "user_id": research.user_id,
-                "idea": research.idea,
+                "idea": research.idea or "Untitled",
                 "ai_insights": research.ai_insights or {},
                 "market_data": research.market_data or {},
                 "competitors": research.competitors or [],
