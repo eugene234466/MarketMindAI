@@ -1,56 +1,17 @@
 {% block extra_scripts %}
 <script>
-    // Wait for DOM to be fully loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded, checking for Plotly...");
-        
-        // Check if Plotly is loaded
-        if (typeof Plotly === 'undefined') {
-            console.log("Plotly not found, waiting for it to load...");
-            
-            // Wait for Plotly to load (it should be in head)
-            const checkPlotly = setInterval(function() {
-                if (typeof Plotly !== 'undefined') {
-                    console.log("Plotly loaded, initializing charts...");
-                    clearInterval(checkPlotly);
-                    initializeCharts();
-                }
-            }, 100);
-            
-            // Timeout after 5 seconds
-            setTimeout(function() {
-                clearInterval(checkPlotly);
-                if (typeof Plotly === 'undefined') {
-                    console.error("Plotly failed to load");
-                    showChartError();
-                }
-            }, 5000);
-        } else {
-            console.log("Plotly already loaded");
-            initializeCharts();
-        }
-    });
-    
-    function showChartError() {
-        const trendsEl = document.getElementById("trendsChart");
-        const salesEl = document.getElementById("salesChart");
-        
-        if (trendsEl) {
-            trendsEl.innerHTML = "<div class='empty-section'><i class='fas fa-chart-line fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>Chart library failed to load. Please refresh the page.</p></div>";
-        }
-        if (salesEl) {
-            salesEl.innerHTML = "<div class='empty-section'><i class='fas fa-dollar-sign fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>Chart library failed to load. Please refresh the page.</p></div>";
-        }
-    }
-    
+    // Wait for Plotly to be ready
     function initializeCharts() {
         console.log("Initializing charts with data...");
         const resultsData = {{ results | tojson | safe }};
         
         // ── TRENDS CHART ─────────────────────────────────────────
         try {
+            const trendsEl = document.getElementById("trendsChart");
+            if (!trendsEl) return;
+            
             const td = resultsData.market_data && resultsData.market_data.trends;
-            if (td && td.dates && td.dates.length > 0) {
+            if (td && td.dates && td.dates.length > 0 && typeof Plotly !== 'undefined') {
                 Plotly.newPlot("trendsChart", [{
                     x        : td.dates,
                     y        : td.values,
@@ -71,8 +32,7 @@
                 }, { responsive: true, displayModeBar: false });
                 console.log("Trends chart rendered");
             } else {
-                document.getElementById("trendsChart").innerHTML = 
-                    "<div class='empty-section'><i class='fas fa-chart-line fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No trend data available</p></div>";
+                trendsEl.innerHTML = "<div class='empty-section'><i class='fas fa-chart-line fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No trend data available</p></div>";
             }
         } catch (e) {
             console.error("Error rendering trends chart:", e);
@@ -80,8 +40,11 @@
 
         // ── SALES CHART ──────────────────────────────────────────
         try {
+            const salesEl = document.getElementById("salesChart");
+            if (!salesEl) return;
+            
             const sf = resultsData.sales_forecast;
-            if (sf && sf.months && sf.months.length > 0) {
+            if (sf && sf.months && sf.months.length > 0 && typeof Plotly !== 'undefined') {
                 Plotly.newPlot("salesChart", [
                     {
                         x: sf.months, y: sf.revenue, type: "bar", name: "Revenue",
@@ -103,22 +66,42 @@
                 }, { responsive: true, displayModeBar: false });
                 console.log("Sales chart rendered");
             } else {
-                document.getElementById("salesChart").innerHTML = 
-                    "<div class='empty-section'><i class='fas fa-dollar-sign fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No forecast data available</p></div>";
+                salesEl.innerHTML = "<div class='empty-section'><i class='fas fa-dollar-sign fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No forecast data available</p></div>";
             }
         } catch (e) {
             console.error("Error rendering sales chart:", e);
         }
-
-        // ── ANIMATE NICHE BARS ───────────────────────────────────
-        setTimeout(() => {
-            document.querySelectorAll(".niche-bar-fill").forEach(bar => {
-                const width = bar.style.width;
-                bar.style.width = "0%";
-                setTimeout(() => { bar.style.width = width; }, 100);
-            });
-        }, 300);
     }
+
+    // Start when Plotly is ready
+    if (typeof Plotly !== 'undefined') {
+        console.log("Plotly already loaded");
+        initializeCharts();
+    } else {
+        console.log("Waiting for Plotly to load...");
+        window.addEventListener('plotly-loaded', initializeCharts);
+        
+        // Fallback timeout
+        setTimeout(function() {
+            if (typeof Plotly !== 'undefined') {
+                initializeCharts();
+            } else {
+                console.error("Plotly failed to load");
+                document.querySelectorAll('[id$="Chart"]').forEach(el => {
+                    if (el) el.innerHTML = '<div style="text-align:center; padding:50px; color:rgba(255,255,255,0.3);"><i class="fas fa-chart-line fa-3x mb-3"></i><p>Charts unavailable - using fallback display</p></div>';
+                });
+            }
+        }, 5000);
+    }
+
+    // ── ANIMATE NICHE BARS ───────────────────────────────────
+    setTimeout(() => {
+        document.querySelectorAll(".niche-bar-fill").forEach(bar => {
+            const width = bar.style.width;
+            bar.style.width = "0%";
+            setTimeout(() => { bar.style.width = width; }, 100);
+        });
+    }, 300);
 
     // ── DOWNLOAD PDF ─────────────────────────────────────────
     function downloadPDF() {
@@ -147,7 +130,6 @@
         })
         .then(async response => {
             if (!response.ok) {
-                const text = await response.text();
                 throw new Error(`Server error: ${response.status}`);
             }
             const text = await response.text();
@@ -209,7 +191,6 @@
         })
         .then(async response => {
             if (!response.ok) {
-                const text = await response.text();
                 throw new Error(`Server error: ${response.status}`);
             }
             const text = await response.text();
