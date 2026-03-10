@@ -1,46 +1,674 @@
-<!-- ── PLOTLY with fallbacks ─────────────────────────────────-->
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script>
-    // Fallback if Plotly fails to load from main CDN
-    window.onerror = function(message, source, lineno, colno, error) {
-        if (source && source.includes('plotly')) {
-            console.log('Plotly failed to load from main CDN, trying fallback...');
-            loadPlotlyFallback();
-        }
-    };
-    
-    function loadPlotlyFallback() {
-        // Try alternate CDN
-        var script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js';
-        script.onload = function() {
-            console.log('Plotly loaded from fallback CDN');
-            // Dispatch an event that Plotly is loaded
-            window.dispatchEvent(new Event('plotly-loaded'));
+<!-- ============================================================
+BASE.HTML — Base Template
+All pages extend this template
+Updated: Added Plotly fallback CDNs
+============================================================ -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MarketMind AI{% endblock %}</title>
+
+    <!-- ── BOOTSTRAP ────────────────────────────────────────-->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+
+    <!-- ── FONT AWESOME ─────────────────────────────────────-->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+          rel="stylesheet">
+
+    <!-- ── GOOGLE FONTS ─────────────────────────────────────-->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+          rel="stylesheet">
+
+    <!-- ── PLOTLY with fallbacks ─────────────────────────────────-->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script>
+        // Fallback if Plotly fails to load from main CDN
+        window.onerror = function(message, source, lineno, colno, error) {
+            if (source && source.includes('plotly')) {
+                console.log('Plotly failed to load from main CDN, trying fallback...');
+                loadPlotlyFallback();
+            }
         };
-        script.onerror = function() {
-            console.error('All Plotly CDNs failed');
-            // Create a dummy Plotly object to prevent errors
-            window.Plotly = {
-                newPlot: function() { 
-                    console.warn('Plotly unavailable - charts disabled');
-                    document.querySelectorAll('[id$="Chart"]').forEach(el => {
-                        if (el) el.innerHTML = '<div style="text-align:center; padding:50px; color:rgba(255,255,255,0.3);"><i class="fas fa-chart-line fa-3x mb-3"></i><p>Charts temporarily unavailable</p></div>';
-                    });
-                }
+        
+        function loadPlotlyFallback() {
+            // Try alternate CDN
+            var script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js';
+            script.onload = function() {
+                console.log('Plotly loaded from fallback CDN');
+                // Dispatch an event that Plotly is loaded
+                window.dispatchEvent(new Event('plotly-loaded'));
             };
-        };
-        document.head.appendChild(script);
-    }
-    
-    // Check if Plotly loaded successfully
-    setTimeout(function() {
-        if (typeof Plotly === 'undefined') {
-            console.log('Plotly not detected, loading fallback...');
-            loadPlotlyFallback();
-        } else {
-            console.log('Plotly loaded successfully');
-            window.dispatchEvent(new Event('plotly-loaded'));
+            script.onerror = function() {
+                console.error('All Plotly CDNs failed');
+                // Create a dummy Plotly object to prevent errors
+                window.Plotly = {
+                    newPlot: function() { 
+                        console.warn('Plotly unavailable - charts disabled');
+                        document.querySelectorAll('[id$="Chart"]').forEach(el => {
+                            if (el) el.innerHTML = '<div style="text-align:center; padding:50px; color:rgba(255,255,255,0.3);"><i class="fas fa-chart-line fa-3x mb-3"></i><p>Charts temporarily unavailable</p></div>';
+                        });
+                    }
+                };
+            };
+            document.head.appendChild(script);
         }
-    }, 2000);
+        
+        // Check if Plotly loaded successfully
+        setTimeout(function() {
+            if (typeof Plotly === 'undefined') {
+                console.log('Plotly not detected, loading fallback...');
+                loadPlotlyFallback();
+            } else {
+                console.log('Plotly loaded successfully');
+                window.dispatchEvent(new Event('plotly-loaded'));
+            }
+        }, 2000);
+    </script>
+
+    <!-- ── BASE STYLES ──────────────────────────────────────-->
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+        /* ── GLOBAL ────────────────────────────────────────── */
+        * {
+            box-sizing  : border-box;
+            margin      : 0;
+            padding     : 0;
+        }
+
+        body {
+            font-family : "Inter", sans-serif;
+            background  : #0a1628;
+            color       : #ffffff;
+            min-height  : 100vh;
+        }
+
+        /* ── NAVBAR ────────────────────────────────────────── */
+        .navbar-main {
+            background    : rgba(10, 22, 40, 0.95);
+            border-bottom : 1px solid rgba(0, 229, 255, 0.15);
+            padding       : 12px 0;
+            position      : sticky;
+            top           : 0;
+            z-index       : 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .navbar-brand-wrap {
+            display     : flex;
+            align-items : center;
+            gap         : 10px;
+            text-decoration: none;
+        }
+
+        .navbar-brand-wrap img {
+            width         : 38px;
+            border-radius : 8px;
+            box-shadow    : 0 0 15px rgba(0,229,255,0.3);
+        }
+
+        .navbar-brand-wrap span {
+            font-size   : 1.2rem;
+            font-weight : 800;
+            color       : #ffffff;
+        }
+
+        .navbar-brand-wrap span em {
+            color      : #00e5ff;
+            font-style : normal;
+        }
+
+        /* ── NAV LINKS ─────────────────────────────────────── */
+        .nav-links {
+            display     : flex;
+            align-items : center;
+            gap         : 5px;
+            list-style  : none;
+            margin      : 0;
+            padding     : 0;
+        }
+
+        .nav-links a {
+            color           : rgba(255,255,255,0.6);
+            text-decoration : none;
+            font-size       : 0.9rem;
+            font-weight     : 500;
+            padding         : 8px 14px;
+            border-radius   : 8px;
+            transition      : all 0.3s ease;
+            display         : flex;
+            align-items     : center;
+            gap             : 6px;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            color      : #00e5ff;
+            background : rgba(0,229,255,0.08);
+        }
+
+        /* ── USER DROPDOWN ─────────────────────────────────── */
+        .user-dropdown {
+            position : relative;
+        }
+
+        .user-btn {
+            display         : flex;
+            align-items     : center;
+            gap             : 8px;
+            background      : rgba(0,229,255,0.08);
+            border          : 1px solid rgba(0,229,255,0.2);
+            border-radius   : 50px;
+            padding         : 7px 16px;
+            color           : #ffffff;
+            font-size       : 0.88rem;
+            font-weight     : 600;
+            cursor          : pointer;
+            transition      : all 0.3s ease;
+        }
+
+        .user-btn:hover {
+            background   : rgba(0,229,255,0.15);
+            border-color : #00e5ff;
+        }
+
+        .user-btn .avatar {
+            width           : 28px;
+            height          : 28px;
+            background      : #00e5ff;
+            color           : #0a1628;
+            border-radius   : 50%;
+            display         : flex;
+            align-items     : center;
+            justify-content : center;
+            font-weight     : 800;
+            font-size       : 0.8rem;
+        }
+
+        .dropdown-menu-custom {
+            display       : none;
+            position      : absolute;
+            right         : 0;
+            top           : calc(100% + 8px);
+            background    : #0d1f38;
+            border        : 1px solid rgba(0,229,255,0.2);
+            border-radius : 12px;
+            min-width     : 200px;
+            overflow      : hidden;
+            box-shadow    : 0 10px 40px rgba(0,0,0,0.4);
+            z-index       : 999;
+        }
+
+        .dropdown-menu-custom.show {
+            display : block;
+            animation: dropDown 0.2s ease;
+        }
+
+        @keyframes dropDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0);    }
+        }
+
+        .dropdown-header {
+            padding    : 15px 18px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .dropdown-header .name {
+            color      : #ffffff;
+            font-weight: 700;
+            font-size  : 0.9rem;
+        }
+
+        .dropdown-header .email {
+            color    : rgba(255,255,255,0.35);
+            font-size: 0.78rem;
+            margin-top: 2px;
+        }
+
+        .dropdown-item-custom {
+            display         : flex;
+            align-items     : center;
+            gap             : 10px;
+            padding         : 11px 18px;
+            color           : rgba(255,255,255,0.65);
+            text-decoration : none;
+            font-size       : 0.88rem;
+            transition      : all 0.2s ease;
+        }
+
+        .dropdown-item-custom:hover {
+            background : rgba(0,229,255,0.08);
+            color      : #00e5ff;
+        }
+
+        .dropdown-item-custom i {
+            width      : 16px;
+            text-align : center;
+            color      : #00e5ff;
+        }
+
+        .dropdown-divider-custom {
+            border-top : 1px solid rgba(255,255,255,0.06);
+            margin     : 4px 0;
+        }
+
+        .dropdown-item-custom.logout {
+            color : rgba(255,100,100,0.7);
+        }
+
+        .dropdown-item-custom.logout i {
+            color : #ff6b6b;
+        }
+
+        .dropdown-item-custom.logout:hover {
+            background : rgba(255,50,50,0.08);
+            color      : #ff6b6b;
+        }
+
+        /* ── AUTH BUTTONS (logged out) ─────────────────────── */
+        .btn-nav-login {
+            color           : rgba(255,255,255,0.7);
+            text-decoration : none;
+            font-size       : 0.9rem;
+            font-weight     : 600;
+            padding         : 8px 18px;
+            border-radius   : 8px;
+            transition      : all 0.3s;
+        }
+
+        .btn-nav-login:hover {
+            color      : #00e5ff;
+            background : rgba(0,229,255,0.08);
+        }
+
+        .btn-nav-register {
+            background      : #00e5ff;
+            color           : #0a1628;
+            text-decoration : none;
+            font-size       : 0.9rem;
+            font-weight     : 700;
+            padding         : 8px 20px;
+            border-radius   : 50px;
+            transition      : all 0.3s;
+        }
+
+        .btn-nav-register:hover {
+            background : #ffffff;
+            color      : #0a1628;
+            transform  : translateY(-1px);
+        }
+
+        /* ── HAMBURGER ─────────────────────────────────────── */
+        .hamburger {
+            display    : none;
+            background : none;
+            border     : none;
+            color      : #ffffff;
+            font-size  : 1.3rem;
+            cursor     : pointer;
+            padding    : 5px;
+        }
+
+        /* ── MOBILE MENU ───────────────────────────────────── */
+        .mobile-menu {
+            display    : none;
+            background : #0d1f38;
+            border-top : 1px solid rgba(0,229,255,0.1);
+            padding    : 15px 20px;
+        }
+
+        .mobile-menu.open { display: block; }
+
+        .mobile-menu a {
+            display         : block;
+            color           : rgba(255,255,255,0.7);
+            text-decoration : none;
+            padding         : 10px 0;
+            font-size       : 0.95rem;
+            border-bottom   : 1px solid rgba(255,255,255,0.05);
+            transition      : color 0.3s;
+        }
+
+        .mobile-menu a:hover { color: #00e5ff; }
+
+        /* ── FLASH MESSAGES ────────────────────────────────── */
+        .flash-container {
+            position : fixed;
+            top      : 70px;
+            right    : 20px;
+            z-index  : 9999;
+            max-width: 350px;
+        }
+
+        .flash-toast {
+            padding       : 14px 18px;
+            border-radius : 12px;
+            margin-bottom : 10px;
+            font-size     : 0.9rem;
+            font-weight   : 500;
+            display       : flex;
+            align-items   : center;
+            gap           : 10px;
+            animation     : slideIn 0.3s ease;
+            box-shadow    : 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to   { opacity: 1; transform: translateX(0);    }
+        }
+
+        .flash-toast.success {
+            background : rgba(0,255,100,0.12);
+            border     : 1px solid rgba(0,255,100,0.3);
+            color      : #00ff64;
+        }
+
+        .flash-toast.danger {
+            background : rgba(255,50,50,0.12);
+            border     : 1px solid rgba(255,50,50,0.3);
+            color      : #ff6b6b;
+        }
+
+        .flash-toast.warning {
+            background : rgba(255,200,0,0.12);
+            border     : 1px solid rgba(255,200,0,0.3);
+            color      : #ffc800;
+        }
+
+        .flash-toast.info {
+            background : rgba(0,229,255,0.12);
+            border     : 1px solid rgba(0,229,255,0.3);
+            color      : #00e5ff;
+        }
+
+        .flash-close {
+            margin-left : auto;
+            cursor      : pointer;
+            opacity     : 0.6;
+            background  : none;
+            border      : none;
+            color       : inherit;
+            font-size   : 0.85rem;
+        }
+
+        /* ── MAIN CONTENT ──────────────────────────────────── */
+        .main-content {
+            min-height : calc(100vh - 65px);
+            padding    : 30px 0;
+        }
+
+        /* ── CARD ──────────────────────────────────────────── */
+        .card-custom {
+            background    : rgba(255,255,255,0.03);
+            border        : 1px solid rgba(0,229,255,0.15);
+            border-radius : 15px;
+            transition    : all 0.3s ease;
+        }
+
+        .card-custom:hover {
+            border-color : rgba(0,229,255,0.3);
+            box-shadow   : 0 8px 30px rgba(0,229,255,0.1);
+        }
+
+        /* ── FOOTER ────────────────────────────────────────── */
+        .footer-main {
+            background    : rgba(10,22,40,0.8);
+            border-top    : 1px solid rgba(0,229,255,0.1);
+            padding       : 20px 0;
+            text-align    : center;
+            color         : rgba(255,255,255,0.3);
+            font-size     : 0.85rem;
+        }
+
+        /* ── RESPONSIVE ────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .nav-links     { display: none; }
+            .hamburger     { display: block; }
+            .desktop-auth  { display: none; }
+        }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+
+<!-- ── NAVBAR ────────────────────────────────────────────────-->
+<nav class="navbar-main">
+    <div class="container d-flex align-items-center justify-content-between">
+
+        <!-- Brand -->
+        <a href="{{ url_for('main.index') if session.get('user_id') else url_for('main.intro') }}"
+           class="navbar-brand-wrap">
+            <img src="{{ url_for('static', filename='images/logo2.jpg') }}"
+                 alt="MarketMind AI">
+            <span>Market<em>Mind</em> AI</span>
+        </a>
+
+        <!-- Nav Links (desktop) -->
+        {% if session.get("user_id") %}
+        <ul class="nav-links">
+            <li>
+                <a href="{{ url_for('main.index') }}"
+                   class="{{ 'active' if request.endpoint == 'main.index' }}">
+                    <i class="fas fa-home"></i> Home
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('main.history') }}"
+                   class="{{ 'active' if request.endpoint == 'main.history' }}">
+                    <i class="fas fa-history"></i> History
+                </a>
+            </li>
+            <li>
+                <a href="{{ url_for('main.about') }}"
+                   class="{{ 'active' if request.endpoint == 'main.about' }}">
+                    <i class="fas fa-info-circle"></i> About
+                </a>
+            </li>
+        </ul>
+        {% endif %}
+
+        <!-- Right Side -->
+        <div class="d-flex align-items-center gap-3 desktop-auth">
+
+            {% if session.get("user_id") %}
+            <!-- ── LOGGED IN — USER DROPDOWN ──────────────── -->
+            <div class="user-dropdown" id="userDropdown">
+                <button class="user-btn" onclick="toggleDropdown()">
+                    <div class="avatar">
+                        {{ session.get("user_name", "U")[0].upper() }}
+                    </div>
+                    {{ session.get("user_name", "User").split()[0] }}
+                    <i class="fas fa-chevron-down"
+                       style="font-size:0.7rem; opacity:0.6"></i>
+                </button>
+
+                <div class="dropdown-menu-custom" id="dropdownMenu">
+                    <!-- User Info -->
+                    <div class="dropdown-header">
+                        <div class="name">
+                            {{ session.get("user_name", "User") }}
+                        </div>
+                        <div class="email">
+                            {{ session.get("user_email", "") }}
+                        </div>
+                    </div>
+
+                    <!-- Menu Items -->
+                    <a href="{{ url_for('main.index') }}"
+                       class="dropdown-item-custom">
+                        <i class="fas fa-search"></i> New Analysis
+                    </a>
+                    <a href="{{ url_for('main.history') }}"
+                       class="dropdown-item-custom">
+                        <i class="fas fa-history"></i> My Research
+                    </a>
+                    <a href="{{ url_for('main.about') }}"
+                       class="dropdown-item-custom">
+                        <i class="fas fa-info-circle"></i> About
+                    </a>
+
+                    <div class="dropdown-divider-custom"></div>
+
+                    <a href="{{ url_for('main.logout') }}"
+                       class="dropdown-item-custom logout">
+                        <i class="fas fa-sign-out-alt"></i> Sign Out
+                    </a>
+                </div>
+            </div>
+
+            {% else %}
+            <!-- ── LOGGED OUT — AUTH BUTTONS ──────────────── -->
+            <a href="{{ url_for('main.login') }}"
+               class="btn-nav-login">
+                Sign In
+            </a>
+            <a href="{{ url_for('main.register') }}"
+               class="btn-nav-register">
+                Get Started
+            </a>
+            {% endif %}
+
+        </div>
+
+        <!-- Hamburger (mobile) -->
+        <button class="hamburger" onclick="toggleMobileMenu()">
+            <i class="fas fa-bars" id="hamburgerIcon"></i>
+        </button>
+
+    </div>
+
+    <!-- ── MOBILE MENU ────────────────────────────────────── -->
+    <div class="mobile-menu" id="mobileMenu">
+        {% if session.get("user_id") %}
+            <a href="{{ url_for('main.index') }}">
+                <i class="fas fa-home"></i> Home
+            </a>
+            <a href="{{ url_for('main.history') }}">
+                <i class="fas fa-history"></i> History
+            </a>
+            <a href="{{ url_for('main.about') }}">
+                <i class="fas fa-info-circle"></i> About
+            </a>
+            <a href="{{ url_for('main.logout') }}"
+               style="color:#ff6b6b;">
+                <i class="fas fa-sign-out-alt"></i> Sign Out
+            </a>
+        {% else %}
+            <a href="{{ url_for('main.login') }}">
+                <i class="fas fa-sign-in-alt"></i> Sign In
+            </a>
+            <a href="{{ url_for('main.register') }}">
+                <i class="fas fa-user-plus"></i> Get Started
+            </a>
+        {% endif %}
+    </div>
+
+</nav>
+
+
+<!-- ── FLASH TOASTS ──────────────────────────────────────────-->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-container" id="flashContainer">
+        {% for category, message in messages %}
+        <div class="flash-toast {{ category }}">
+            {% if category == "success" %}
+                <i class="fas fa-check-circle"></i>
+            {% elif category == "danger" %}
+                <i class="fas fa-exclamation-circle"></i>
+            {% elif category == "warning" %}
+                <i class="fas fa-exclamation-triangle"></i>
+            {% else %}
+                <i class="fas fa-info-circle"></i>
+            {% endif %}
+            {{ message }}
+            <button class="flash-close"
+                    onclick="this.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+{% endwith %}
+
+
+<!-- ── MAIN CONTENT ──────────────────────────────────────────-->
+<div class="main-content">
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</div>
+
+
+<!-- ── FOOTER ────────────────────────────────────────────────-->
+<footer class="footer-main">
+    <div class="container">
+        <span>
+            &copy; 2026 MarketMind AI &nbsp;|&nbsp;
+            Built in Ghana 🇬🇭 &nbsp;|&nbsp;
+            Powered by Gemini AI
+        </span>
+    </div>
+</footer>
+
+
+<!-- ── BOOTSTRAP JS ──────────────────────────────────────────-->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // ── 1. USER DROPDOWN ─────────────────────────────────────
+    function toggleDropdown() {
+        document.getElementById("dropdownMenu").classList.toggle("show");
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", function(e) {
+        const dropdown = document.getElementById("userDropdown");
+        if (dropdown && !dropdown.contains(e.target)) {
+            document.getElementById("dropdownMenu").classList.remove("show");
+        }
+    });
+
+
+    // ── 2. MOBILE MENU ───────────────────────────────────────
+    function toggleMobileMenu() {
+        const menu = document.getElementById("mobileMenu");
+        const icon = document.getElementById("hamburgerIcon");
+        menu.classList.toggle("open");
+
+        if (menu.classList.contains("open")) {
+            icon.className = "fas fa-times";
+        } else {
+            icon.className = "fas fa-bars";
+        }
+    }
+
+
+    // ── 3. AUTO DISMISS FLASH TOASTS ─────────────────────────
+    setTimeout(() => {
+        const toasts = document.querySelectorAll(".flash-toast");
+        toasts.forEach(t => {
+            t.style.opacity   = "0";
+            t.style.transform = "translateX(20px)";
+            t.style.transition= "all 0.5s ease";
+            setTimeout(() => t.remove(), 500);
+        });
+    }, 4000);
 </script>
+
+{% block extra_scripts %}{% endblock %}
+
+</body>
+
+</html>
