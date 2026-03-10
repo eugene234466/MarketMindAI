@@ -1,524 +1,3 @@
-<!-- ============================================================
-DASHBOARD.HTML — Interactive Results Dashboard
-============================================================ -->
-
-{% extends "base.html" %}
-
-{% block title %}Dashboard — {{ results.idea }}{% endblock %}
-
-
-{% block extra_head %}
-<style>
-    /* ── KPI CARDS ─────────────────────────────────────────── */
-    .kpi-card {
-        background    : rgba(255,255,255,0.05);
-        border        : 1px solid rgba(0,229,255,0.2);
-        border-radius : 15px;
-        padding       : 25px;
-        text-align    : center;
-        transition    : all 0.3s ease;
-        height        : 100%;
-    }
-    .kpi-card:hover {
-        border-color : #00e5ff;
-        transform    : translateY(-3px);
-        box-shadow   : 0 10px 30px rgba(0,229,255,0.2);
-    }
-    .kpi-value { font-size: 2rem; font-weight: 700; color: #00e5ff; }
-    .kpi-label { color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-top: 5px; }
-
-    /* ── SECTION CARD ──────────────────────────────────────── */
-    .section-card {
-        background    : rgba(255,255,255,0.03);
-        border        : 1px solid rgba(0,229,255,0.15);
-        border-radius : 15px;
-        padding       : 30px;
-        margin-bottom : 25px;
-    }
-    .section-title {
-        color         : #00e5ff;
-        font-weight   : 700;
-        font-size     : 1.1rem;
-        margin-bottom : 20px;
-        padding-bottom: 12px;
-        border-bottom : 1px solid rgba(0,229,255,0.2);
-        display       : flex;
-        align-items   : center;
-        gap           : 10px;
-    }
-
-    /* ── VERDICT BANNER ────────────────────────────────────── */
-    .verdict-banner {
-        border-radius : 20px;
-        padding       : 35px;
-        text-align    : center;
-        margin-bottom : 25px;
-        position      : relative;
-        overflow      : hidden;
-    }
-    .verdict-banner.go {
-        background : linear-gradient(135deg, rgba(0,200,100,0.15), rgba(0,229,255,0.1));
-        border     : 2px solid rgba(0,200,100,0.5);
-    }
-    .verdict-banner.nogo {
-        background : linear-gradient(135deg, rgba(255,50,50,0.15), rgba(255,100,50,0.1));
-        border     : 2px solid rgba(255,50,50,0.5);
-    }
-    .verdict-badge {
-        display       : inline-flex;
-        align-items   : center;
-        gap           : 12px;
-        font-size     : 2rem;
-        font-weight   : 800;
-        padding       : 15px 40px;
-        border-radius : 50px;
-        margin-bottom : 15px;
-    }
-    .verdict-badge.go   { background: rgba(0,200,100,0.2);  color: #00ff64; border: 2px solid #00ff64; }
-    .verdict-badge.nogo { background: rgba(255,50,50,0.2);  color: #ff4444; border: 2px solid #ff4444; }
-    .verdict-reason     { color: rgba(255,255,255,0.7); font-size: 1.1rem; max-width: 600px; margin: 0 auto; line-height: 1.7; }
-
-    /* ── SUMMARY CARD ──────────────────────────────────────── */
-    .summary-text {
-        font-size   : 1rem;
-        line-height : 1.8;
-        color       : rgba(255,255,255,0.75);
-        border-left : 3px solid #00e5ff;
-        padding-left: 20px;
-        margin-bottom: 20px;
-    }
-
-    /* ── RECOMMENDATIONS ───────────────────────────────────── */
-    .rec-item {
-        display       : flex;
-        align-items   : flex-start;
-        gap           : 15px;
-        padding       : 14px;
-        border-radius : 10px;
-        margin-bottom : 10px;
-        background    : rgba(0,229,255,0.04);
-        border        : 1px solid rgba(0,229,255,0.1);
-        transition    : all 0.3s;
-    }
-    .rec-item:hover { background: rgba(0,229,255,0.08); border-color: rgba(0,229,255,0.25); }
-    .rec-number {
-        background    : #00e5ff;
-        color         : #0a1628;
-        font-weight   : 800;
-        font-size     : 0.85rem;
-        width         : 28px;
-        height        : 28px;
-        border-radius : 50%;
-        display       : flex;
-        align-items   : center;
-        justify-content: center;
-        flex-shrink   : 0;
-    }
-    .rec-text { color: rgba(255,255,255,0.8); font-size: 0.95rem; line-height: 1.5; }
-
-    /* ── RISKS ─────────────────────────────────────────────── */
-    .risk-item {
-        display       : flex;
-        align-items   : flex-start;
-        gap           : 12px;
-        padding       : 12px;
-        border-radius : 10px;
-        margin-bottom : 8px;
-        background    : rgba(255,50,50,0.05);
-        border        : 1px solid rgba(255,50,50,0.15);
-    }
-    .risk-icon { color: #ff6b6b; font-size: 0.85rem; margin-top: 2px; flex-shrink: 0; }
-    .risk-text { color: rgba(255,255,255,0.7); font-size: 0.9rem; }
-
-    /* ── COMPETITORS ───────────────────────────────────────── */
-    .competitor-table { background: transparent; color: #ffffff; }
-    .competitor-table th { color: #00e5ff; border-color: rgba(0,229,255,0.2); font-size: 0.85rem; }
-    .competitor-table td { border-color: rgba(255,255,255,0.05); vertical-align: middle; font-size: 0.9rem; }
-
-    /* ── NICHE BAR ─────────────────────────────────────────── */
-    .niche-bar      { background: rgba(255,255,255,0.08); border-radius: 50px; height: 8px; margin: 6px 0; }
-    .niche-bar-fill { background: linear-gradient(90deg, #00e5ff, #00ff64); border-radius: 50px; height: 8px; transition: width 1.2s ease; }
-    .niche-card {
-        background    : rgba(255,255,255,0.03);
-        border        : 1px solid rgba(0,229,255,0.12);
-        border-radius : 12px;
-        padding       : 18px;
-        margin-bottom : 12px;
-        transition    : all 0.3s;
-    }
-    .niche-card:hover { border-color: rgba(0,229,255,0.3); }
-
-    /* ── PRICING ───────────────────────────────────────────── */
-    .pricing-card {
-        background    : rgba(255,255,255,0.04);
-        border        : 1px solid rgba(0,229,255,0.15);
-        border-radius : 15px;
-        padding       : 25px;
-        text-align    : center;
-        height        : 100%;
-        transition    : all 0.3s;
-    }
-    .pricing-card:hover { border-color: #00e5ff; transform: translateY(-3px); }
-    .pricing-tier  { color: rgba(255,255,255,0.5); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
-    .pricing-value { color: #00e5ff; font-size: 1.5rem; font-weight: 700; }
-
-    /* ── BUTTONS ───────────────────────────────────────────── */
-    .btn-download {
-        background    : #00e5ff; color: #0a1628; font-weight: 700;
-        padding       : 13px 30px; border-radius: 50px; border: none;
-        cursor        : pointer; transition: all 0.3s; font-size: 0.95rem;
-    }
-    .btn-download:hover { background: #ffffff; transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,229,255,0.3); }
-    .btn-email {
-        background    : transparent; color: #00e5ff; font-weight: 700;
-        padding       : 13px 30px; border-radius: 50px; border: 2px solid #00e5ff;
-        cursor        : pointer; transition: all 0.3s; font-size: 0.95rem;
-    }
-    .btn-email:hover { background: rgba(0,229,255,0.1); transform: translateY(-2px); }
-    .email-input {
-        background    : rgba(255,255,255,0.05); border: 1px solid rgba(0,229,255,0.3);
-        border-radius : 50px; color: #ffffff; padding: 12px 20px; font-size: 0.9rem;
-        outline       : none; transition: all 0.3s; width: 100%;
-    }
-    .email-input:focus       { border-color: #00e5ff; box-shadow: 0 0 15px rgba(0,229,255,0.2); }
-    .email-input::placeholder{ color: rgba(255,255,255,0.3); }
-
-    /* ── EMPTY STATE ───────────────────────────────────────── */
-    .empty-section { text-align: center; padding: 30px; color: rgba(255,255,255,0.25); }
-
-    /* ── CACHE BADGE ───────────────────────────────────────── */
-    .cache-badge {
-        background    : rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.3);
-        border-radius : 50px; color: #00e5ff; font-size: 0.75rem;
-        padding       : 3px 12px; margin-left: 10px;
-    }
-
-    /* ── TARGET MARKET TAG ─────────────────────────────────── */
-    .target-tag {
-        display       : inline-block;
-        background    : rgba(0,229,255,0.1);
-        border        : 1px solid rgba(0,229,255,0.2);
-        border-radius : 50px;
-        color         : #00e5ff;
-        font-size     : 0.82rem;
-        padding       : 4px 15px;
-        margin-top    : 12px;
-    }
-</style>
-{% endblock %}
-
-
-{% block content %}
-
-<!-- ── HEADER ────────────────────────────────────────────────-->
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-    <div>
-        <h2 class="text-white mb-1" style="font-size:1.6rem; font-weight:800;">
-            <i class="fas fa-chart-line" style="color:#00e5ff"></i>
-            Market Analysis
-            {% if results.get('from_cache') %}
-            <span class="cache-badge">⚡ Cached</span>
-            {% endif %}
-        </h2>
-        <p class="text-white-50 mb-0">
-            💡 <strong class="text-white">{{ results.idea }}</strong>
-            &nbsp;·&nbsp;
-            <small>{{ results.created_at }}</small>
-        </p>
-    </div>
-    <button onclick="downloadPDF()" class="btn-download" id="pdfBtn">
-        <i class="fas fa-file-pdf"></i> Download PDF
-    </button>
-</div>
-
-
-<!-- ── VERDICT BANNER ────────────────────────────────────────-->
-{% set verdict = results.ai_insights.get('verdict', 'GO') %}
-<div class="verdict-banner {{ 'go' if verdict == 'GO' else 'nogo' }}">
-    <div class="verdict-badge {{ 'go' if verdict == 'GO' else 'nogo' }}">
-        {% if verdict == "GO" %}
-            <i class="fas fa-check-circle"></i> GO
-        {% else %}
-            <i class="fas fa-times-circle"></i> NO GO
-        {% endif %}
-    </div>
-    <p class="verdict-reason">
-        {{ results.ai_insights.get('verdict_reason', '') }}
-    </p>
-</div>
-
-
-<!-- ── KPI ROW ───────────────────────────────────────────────-->
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-value">{{ results.market_data.get('market_size', 'N/A') }}</div>
-            <div class="kpi-label"><i class="fas fa-globe"></i> Market Size</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-value">{{ results.market_data.get('competition_level', 'N/A') }}</div>
-            <div class="kpi-label"><i class="fas fa-users"></i> Competition</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-value">{{ results.market_data.get('profit_potential', 'N/A') }}</div>
-            <div class="kpi-label"><i class="fas fa-dollar-sign"></i> Profit Potential</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-value">{{ results.market_data.get('trend_score', 'N/A') }}/10</div>
-            <div class="kpi-label"><i class="fas fa-arrow-trend-up"></i> Trend Score</div>
-        </div>
-    </div>
-</div>
-
-
-<!-- ── AI INSIGHTS ───────────────────────────────────────────-->
-<div class="section-card">
-    <div class="section-title">
-        <i class="fas fa-brain"></i> AI Insights
-    </div>
-
-    <!-- Summary -->
-    <p class="summary-text">
-        {{ results.ai_insights.get('summary', 'Analysis unavailable.') }}
-    </p>
-
-    <!-- Target Market -->
-    {% if results.ai_insights.get('target_market') %}
-    <div>
-        <small class="text-white-50" style="text-transform:uppercase; letter-spacing:1px; font-size:0.75rem;">
-            Target Market
-        </small>
-        <div class="target-tag">
-            <i class="fas fa-crosshairs"></i>
-            {{ results.ai_insights.target_market }}
-        </div>
-    </div>
-    {% endif %}
-
-    <div class="row mt-4 g-4">
-        <!-- Recommendations -->
-        <div class="col-md-7">
-            <h6 style="color:#00e5ff; margin-bottom:15px;">
-                <i class="fas fa-list-check"></i> Recommendations
-            </h6>
-            {% if results.ai_insights.get('recommendations') %}
-                {% for rec in results.ai_insights.recommendations %}
-                <div class="rec-item">
-                    <div class="rec-number">{{ loop.index }}</div>
-                    <div class="rec-text">{{ rec }}</div>
-                </div>
-                {% endfor %}
-            {% else %}
-            <p class="text-white-50 small">No recommendations available.</p>
-            {% endif %}
-        </div>
-
-        <!-- Key Risks -->
-        <div class="col-md-5">
-            <h6 style="color:#ff6b6b; margin-bottom:15px;">
-                <i class="fas fa-triangle-exclamation"></i> Key Risks
-            </h6>
-            {% if results.ai_insights.get('key_risks') %}
-                {% for risk in results.ai_insights.key_risks %}
-                <div class="risk-item">
-                    <i class="fas fa-circle-exclamation risk-icon"></i>
-                    <div class="risk-text">{{ risk }}</div>
-                </div>
-                {% endfor %}
-            {% else %}
-            <p class="text-white-50 small">No risk data available.</p>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-
-<!-- ── MARKET TRENDS CHART ────────────────────────────────────-->
-<div class="section-card">
-    <div class="section-title"><i class="fas fa-chart-line"></i> Market Trends (12 Months)</div>
-    <div id="trendsChart" style="height:350px;"></div>
-</div>
-
-
-<!-- ── SALES FORECAST ─────────────────────────────────────────-->
-<div class="section-card">
-    <div class="section-title"><i class="fas fa-dollar-sign"></i> 12-Month Sales Forecast</div>
-    <div id="salesChart" style="height:350px;"></div>
-    <div class="row mt-3 text-center g-3">
-        <div class="col-md-4">
-            <div class="kpi-card">
-                <div class="kpi-value" style="font-size:1.5rem;">
-                    ${{ "{:,}".format(results.sales_forecast.get('total_year', 0)) }}
-                </div>
-                <div class="kpi-label">Annual Revenue</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="kpi-card">
-                <div class="kpi-value" style="font-size:1.5rem; color:#00ff64;">
-                    {{ results.sales_forecast.get('growth_rate', 'N/A') }}
-                </div>
-                <div class="kpi-label">Growth Rate</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="kpi-card">
-                <div class="kpi-value" style="font-size:1.5rem; color:#ffc800;">
-                    {{ results.sales_forecast.get('peak_month', 'N/A') }}
-                </div>
-                <div class="kpi-label">Peak Month</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<!-- ── PRICING STRATEGY ───────────────────────────────────────-->
-<div class="section-card">
-    <div class="section-title"><i class="fas fa-tag"></i> Pricing Strategy</div>
-    <div class="row g-3">
-        <div class="col-md-4">
-            <div class="pricing-card">
-                <div class="pricing-tier">💰 Budget Tier</div>
-                <div class="pricing-value">
-                    {{ results.ai_insights.get('pricing', {}).get('budget', 'N/A') }}
-                </div>
-                <small class="text-white-50 d-block mt-2">Entry-level segment</small>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="pricing-card" style="border-color:rgba(0,229,255,0.3);">
-                <div class="pricing-tier">⭐ Mid Tier</div>
-                <div class="pricing-value">
-                    {{ results.ai_insights.get('pricing', {}).get('mid', 'N/A') }}
-                </div>
-                <small class="text-white-50 d-block mt-2">Recommended starting point</small>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="pricing-card">
-                <div class="pricing-tier">👑 Premium Tier</div>
-                <div class="pricing-value">
-                    {{ results.ai_insights.get('pricing', {}).get('premium', 'N/A') }}
-                </div>
-                <small class="text-white-50 d-block mt-2">High-end market segment</small>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<!-- ── COMPETITOR ANALYSIS ────────────────────────────────────-->
-<div class="section-card">
-    <div class="section-title"><i class="fas fa-users"></i> Competitor Analysis</div>
-    {% if results.competitors %}
-    <div class="table-responsive">
-        <table class="table competitor-table">
-            <thead>
-                <tr>
-                    <th>Competitor</th>
-                    <th>Market Share</th>
-                    <th>Strength</th>
-                    <th>Weakness</th>
-                    <th>Threat</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for c in results.competitors %}
-                <tr>
-                    <td><strong>{{ c.name }}</strong></td>
-                    <td>{{ c.market_share }}</td>
-                    <td class="text-white-50">{{ c.get('strength', 'N/A') }}</td>
-                    <td class="text-white-50">{{ c.get('weakness',  'N/A') }}</td>
-                    <td>
-                        {% if c.threat == "High" %}
-                            <span class="badge bg-danger">High</span>
-                        {% elif c.threat == "Medium" %}
-                            <span class="badge bg-warning text-dark">Medium</span>
-                        {% else %}
-                            <span class="badge bg-success">Low</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="empty-section">
-        <i class="fas fa-search fa-2x mb-3" style="color:rgba(0,229,255,0.3)"></i>
-        <p>No competitor data found.<br>Try a more specific search term.</p>
-    </div>
-    {% endif %}
-</div>
-
-
-<!-- ── NICHE OPPORTUNITIES ────────────────────────────────────-->
-<div class="section-card">
-    <div class="section-title"><i class="fas fa-lightbulb"></i> Niche Opportunities</div>
-    {% if results.niches %}
-        {% for niche in results.niches %}
-        <div class="niche-card">
-            <div class="d-flex justify-content-between align-items-start mb-1">
-                <span class="text-white fw-bold">{{ niche.name }}</span>
-                <span style="color:#00e5ff; font-weight:700;">{{ niche.score }}/100</span>
-            </div>
-            <div class="niche-bar">
-                <div class="niche-bar-fill" style="width:{{ niche.score }}%"></div>
-            </div>
-            <small class="text-white-50 d-block mt-1">{{ niche.description }}</small>
-            {% if niche.get('audience') %}
-            <small style="color:rgba(0,229,255,0.6);">
-                <i class="fas fa-user-group"></i> {{ niche.audience }}
-            </small>
-            {% endif %}
-        </div>
-        {% endfor %}
-    {% else %}
-    <div class="empty-section">
-        <i class="fas fa-lightbulb fa-2x mb-3" style="color:rgba(0,229,255,0.3)"></i>
-        <p>No niche data found for this idea.</p>
-    </div>
-    {% endif %}
-</div>
-
-
-<!-- ── EXPORT ─────────────────────────────────────────────────-->
-<div class="section-card">
-    <div class="section-title"><i class="fas fa-share-alt"></i> Export Report</div>
-    <div class="row g-3 align-items-end">
-        <div class="col-md-4 text-center">
-            <button onclick="downloadPDF()" class="btn-download w-100" id="pdfBtn2">
-                <i class="fas fa-file-pdf"></i> Download PDF
-            </button>
-        </div>
-        <div class="col-md-5">
-            <label class="text-white-50 small mb-2">Email the report:</label>
-            <input type="email" id="emailInput" class="email-input"
-                   placeholder="Enter email address">
-            <button onclick="emailReport()" class="btn-email w-100 mt-2" id="emailBtn">
-                <i class="fas fa-envelope"></i> Send Report
-            </button>
-        </div>
-        <div class="col-md-3 text-center">
-            <a href="{{ url_for('main.index') }}"
-               class="btn btn-outline-info w-100"
-               style="border-radius:50px; padding:13px 20px; display:block;">
-                <i class="fas fa-redo"></i> New Analysis
-            </a>
-        </div>
-    </div>
-</div>
-
-{% endblock %}
-
-
 {% block extra_scripts %}
 <script>
     const resultsData = {{ results | tojson | safe }};
@@ -589,30 +68,62 @@ DASHBOARD.HTML — Interactive Results Dashboard
     function downloadPDF() {
         const btn1 = document.getElementById("pdfBtn");
         const btn2 = document.getElementById("pdfBtn2");
-        [btn1, btn2].forEach(b => { if (b) b.innerHTML = "⏳ Generating..."; });
-
+        [btn1, btn2].forEach(b => { if (b) { b.innerHTML = "⏳ Generating..."; b.disabled = true; } });
+        
+        // Check if we have a direct PDF path from database
+        {% if results and results.get('pdf_path') %}
+            const pdfPath = "{{ results.pdf_path }}";
+            window.open("/download/" + encodeURIComponent(pdfPath), "_blank");
+            [btn1, btn2].forEach(b => { if (b) { b.innerHTML = "✅ Downloaded!"; b.disabled = false; } });
+            setTimeout(() => {
+                [btn1, btn2].forEach(b => { if (b) b.innerHTML = "<i class='fas fa-file-pdf'></i> Download PDF"; });
+            }, 3000);
+            return;
+        {% endif %}
+        
+        // Otherwise generate new PDF
         const payload = new URLSearchParams();
-        payload.append("idea",    resultsData.idea);
-        payload.append("results", JSON.stringify(resultsData));
-
+        payload.append("idea",    "{{ results.idea }}");
+        payload.append("results", JSON.stringify({{ results | tojson | safe }}));
+        
         fetch("/report", {
             method : "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body   : payload
         })
-        .then(r => r.json())
+        .then(async response => {
+            // Check if response is OK
+            if (!response.ok) {
+                const text = await response.text();
+                console.error("Server response:", text.substring(0, 200));
+                throw new Error(`Server error: ${response.status}`);
+            }
+            
+            // Try to parse as JSON
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error("Failed to parse JSON. Response was:", text.substring(0, 200));
+                throw new Error("Server returned HTML instead of JSON. The endpoint might be down.");
+            }
+        })
         .then(data => {
-            if (data.pdf_path) {
-                window.open("/download/" + data.pdf_path, "_blank");
-                [btn1, btn2].forEach(b => { if (b) b.innerHTML = "✅ Downloaded!"; });
+            if (data.success && data.pdf_path) {
+                window.open("/download/" + encodeURIComponent(data.pdf_path), "_blank");
+                [btn1, btn2].forEach(b => { if (b) { b.innerHTML = "✅ Downloaded!"; b.disabled = false; } });
+                setTimeout(() => {
+                    [btn1, btn2].forEach(b => { if (b) b.innerHTML = "<i class='fas fa-file-pdf'></i> Download PDF"; });
+                }, 3000);
             } else {
                 alert("PDF failed: " + (data.error || "Unknown error"));
-                [btn1, btn2].forEach(b => { if (b) b.innerHTML = "<i class='fas fa-file-pdf'></i> Download PDF"; });
+                [btn1, btn2].forEach(b => { if (b) { b.innerHTML = "<i class='fas fa-file-pdf'></i> Download PDF"; b.disabled = false; } });
             }
         })
         .catch(err => {
-            alert("Error: " + err);
-            [btn1, btn2].forEach(b => { if (b) b.innerHTML = "<i class='fas fa-file-pdf'></i> Download PDF"; });
+            console.error("PDF error:", err);
+            alert("Error generating PDF: " + err.message);
+            [btn1, btn2].forEach(b => { if (b) { b.innerHTML = "<i class='fas fa-file-pdf'></i> Download PDF"; b.disabled = false; } });
         });
     }
 
@@ -620,32 +131,70 @@ DASHBOARD.HTML — Interactive Results Dashboard
     function emailReport() {
         const email = document.getElementById("emailInput").value;
         const btn   = document.getElementById("emailBtn");
-        if (!email) { alert("Please enter an email address"); return; }
+        if (!email) { 
+            alert("Please enter an email address"); 
+            return; 
+        }
+        
+        // Simple email validation
+        if (!email.includes('@') || !email.includes('.')) {
+            alert("Please enter a valid email address");
+            return;
+        }
+        
         btn.innerHTML = "⏳ Sending...";
-
+        btn.disabled = true;
+        
         const payload = new URLSearchParams();
         payload.append("email",   email);
-        payload.append("idea",    resultsData.idea);
-        payload.append("results", JSON.stringify(resultsData));
-
+        payload.append("idea",    "{{ results.idea }}");
+        payload.append("results", JSON.stringify({{ results | tojson | safe }}));
+        
+        {% if results and results.get('pdf_path') %}
+        payload.append("pdf_path", "{{ results.pdf_path }}");
+        {% endif %}
+        
         fetch("/email", {
             method : "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body   : payload
         })
-        .then(r => r.json())
+        .then(async response => {
+            // Check if response is OK
+            if (!response.ok) {
+                const text = await response.text();
+                console.error("Server response:", text.substring(0, 200));
+                throw new Error(`Server error: ${response.status}`);
+            }
+            
+            // Try to parse as JSON
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error("Failed to parse JSON. Response was:", text.substring(0, 200));
+                throw new Error("Server returned HTML instead of JSON. The endpoint might be down.");
+            }
+        })
         .then(data => {
             if (data.success) {
                 btn.innerHTML = "✅ Sent!";
                 alert("Report sent to " + email);
+                setTimeout(() => {
+                    btn.innerHTML = "<i class='fas fa-envelope'></i> Send Report";
+                    btn.disabled = false;
+                }, 3000);
             } else {
                 alert("Failed: " + (data.error || "Unknown error"));
                 btn.innerHTML = "<i class='fas fa-envelope'></i> Send Report";
+                btn.disabled = false;
             }
         })
         .catch(err => {
-            alert("Error: " + err);
+            console.error("Email error:", err);
+            alert("Error sending email: " + err.message);
             btn.innerHTML = "<i class='fas fa-envelope'></i> Send Report";
+            btn.disabled = false;
         });
     }
 </script>
