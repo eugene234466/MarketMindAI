@@ -231,14 +231,34 @@ def dashboard():
 def report():
     try:
         from core.report_generator import generate_pdf
-        idea    = request.form.get("idea")
+        idea    = request.form.get("idea", "")
         results = json.loads(request.form.get("results", "{}"))
         path    = generate_pdf(idea, results)
-        return send_file(path, as_attachment=True,
-                         download_name=f"marketmind_{idea[:30]}.pdf",
-                         mimetype="application/pdf")
+        if not path:
+            return jsonify({"error": "PDF generation failed"}), 500
+        # Store just the filename — the download route resolves the full path
+        filename = os.path.basename(path)
+        return jsonify({"pdf_path": filename})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── 10b. DOWNLOAD PDF ─────────────────────────────────────────
+@main.route("/download/<filename>")
+@login_required
+def download_pdf(filename):
+    # Sanitise — allow only safe filenames
+    import re
+    if not re.match(r'^MarketMind_[\w\-]+\.pdf$', filename):
+        abort(404)
+    reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "reports")
+    reports_dir = os.path.normpath(reports_dir)
+    filepath = os.path.join(reports_dir, filename)
+    if not os.path.exists(filepath):
+        abort(404)
+    return send_file(filepath, as_attachment=True,
+                     download_name=filename,
+                     mimetype="application/pdf")
 
 
 # ── 11. NICHE ─────────────────────────────────────────────────
