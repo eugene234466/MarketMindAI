@@ -15,11 +15,8 @@ from database.db import (
     save_research, get_history, get_research_by_id,
     create_user, get_user_by_email, verify_password, get_user_by_id,
     delete_research, create_job, complete_job, fail_job, get_job, delete_job,
-    get_user_usage, increment_usage, update_user_plan, cancel_user_plan,
-    get_user_by_stripe_customer,
+    increment_usage,
 )
-from app.plan_utils import can_analyse, can_download_pdf, can_email_report, get_analyses_remaining, get_history_limit
-from app.billing import create_checkout_session, create_portal_session, handle_webhook, is_stripe_configured
 from app.cache import get_cached, set_cache, clear_cache, cache_info
 
 main = Blueprint("main", __name__)
@@ -62,7 +59,6 @@ def login():
         session["user_id"]    = user["id"]
         session["user_name"]  = user["name"]
         session["user_email"] = user["email"]
-        session["user_plan"]  = user.get("plan", "free")
         flash(f"Welcome back, {user['name']}!", "success")
         return redirect(url_for("main.index"))
     return render_template("login.html")
@@ -97,7 +93,6 @@ def register():
             session["user_id"]    = user_id
             session["user_name"]  = name
             session["user_email"] = email
-            session["user_plan"]  = "free"
             flash(f"Welcome to MarketMind AI, {first}!", "success")
             return redirect(url_for("main.index"))
         flash("Registration failed. Please try again.", "danger")
@@ -118,9 +113,7 @@ def logout():
 @main.route("/")
 @login_required
 def index():
-    remaining = get_analyses_remaining(session["user_id"])
-    plan      = session.get("user_plan", "free")
-    return render_template("index.html", remaining=remaining, plan=plan)
+    return render_template("index.html")
 
 
 # ── 6. ANALYZE ────────────────────────────────────────────────
@@ -134,14 +127,7 @@ def analyze():
         flash("Please enter a business idea", "danger")
         return redirect(url_for("main.index"))
 
-    # ── CHECK PLAN LIMIT ──────────────────────────────────────
-    allowed, reason = can_analyse(user_id)
-    if not allowed:
-        return render_template("paywall.html", reason=reason,
-                               plan=session.get("user_plan","free"),
-                               stripe_configured=is_stripe_configured())
-
-    # ── CACHE HIT ─────────────────────────────────────────────
+    # Cache hit — save and redirect immediately
     cached = get_cached(idea)
     if cached:
         cached["from_cache"] = True
@@ -166,16 +152,6 @@ def analyze_run():
         if not idea:
             return jsonify({"error": "No idea provided"}), 400
 
-        # Check plan limit
-        try:
-            allowed, reason = can_analyse(user_id)
-        except Exception as e:
-            print(f"[analyze_run] can_analyse error: {e}")
-            allowed, reason = True, ""   # fail open — don't block user on DB hiccup
-
-        if not allowed:
-            return jsonify({"error": reason, "upgrade_required": True}), 403
-
         job_id = str(uuid.uuid4())
         create_job(job_id)
 
@@ -197,7 +173,6 @@ def analyze_run():
 
     except Exception as e:
         import traceback; traceback.print_exc()
-        print(f"[analyze_run] Unexpected error: {e}")
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
@@ -228,28 +203,27 @@ def dashboard():
 @main.route("/report", methods=["POST"])
 @login_required
 def report():
-    plan = session.get("user_plan", "free")
-    if not can_download_pdf(plan):
-        return jsonify({"error": "PDF download is a Pro feature. Please upgrade.", "upgrade_required": True}), 403
     try:
         from core.report_generator import generate_pdf
-        idea     = request.form.get("idea")
-        results  = json.loads(request.form.get("results", "{}"))
-        pdf_path = generate_pdf(idea, results)
-        if pdf_path:
-            return jsonify({"pdf_path": pdf_path, "success": True})
-        return jsonify({"error": "PDF generation failed"}), 500
+        idea    = request.form.get("idea")
+        results = json.loads(request.form.get("results", "{}"))
+        path    = generate_pdf(idea, results)
+        return send_file(path, as_attachment=True,
+                         download_name=f"marketmind_{idea[:30]}.pdf",
+                         mimetype="application/pdf")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# ── 11. DOWNLOAD ──────────────────────────────────────────────
-@main.route("/download/<path:filepath>")
+# ── 11. NICHE ─────────────────────────────────────────────────
+@main.route("/niche/<int:research_id>")
 @login_required
-def download(filepath):
+def niche_detail(research_id):
     try:
-        return send_file(os.path.join(os.getcwd(), filepath),
-                         as_attachment=True, download_name="MarketMind_Report.pdf")
+        results = get_research_by_id(research_id)
+        if not results:
+            abort(404)
+        return jsonify(results.get("niche_opportunities", {}))
     except Exception as e:
         return jsonify({"error": str(e)}), 404
 
@@ -258,9 +232,6 @@ def download(filepath):
 @main.route("/email", methods=["POST"])
 @login_required
 def email_report():
-    plan = session.get("user_plan", "free")
-    if not can_email_report(plan):
-        return jsonify({"error": "Email report is a Pro feature. Please upgrade.", "upgrade_required": True}), 403
     try:
         from core.report_generator import generate_pdf
         from core.email_sender     import send_report
@@ -278,13 +249,11 @@ def email_report():
 @main.route("/history")
 @login_required
 def history():
-    plan  = session.get("user_plan", "free")
-    limit = get_history_limit(plan)
     try:
-        past = get_history(session["user_id"], limit=limit or 50)
+        past = get_history(session["user_id"], limit=50)
     except Exception:
         past = []
-    return render_template("history.html", research=past, plan=plan, history_limit=limit)
+    return render_template("history.html", research=past)
 
 
 # ── 14. VIEW RESEARCH ─────────────────────────────────────────
@@ -296,10 +265,8 @@ def view_research(research_id):
         if not results:
             flash("Research not found", "warning")
             return redirect(url_for("main.history"))
-        plan = session.get("user_plan", "free")
         return render_template("dashboard.html", results=results,
-                               can_pdf=can_download_pdf(plan),
-                               can_email=can_email_report(plan))
+                               can_pdf=True, can_email=True)
     except Exception as e:
         print(f"[view_research] {e}")
         return redirect(url_for("main.history"))
@@ -317,106 +284,7 @@ def delete_research_route(research_id):
     return redirect(url_for("main.history"))
 
 
-# ── 16. PRICING ───────────────────────────────────────────────
-@main.route("/pricing")
-def pricing():
-    plan   = session.get("user_plan", "free")
-    return render_template("pricing.html",
-                           plans=Config.PLANS,
-                           current_plan=plan,
-                           stripe_configured=is_stripe_configured())
-
-
-# ── 17. UPGRADE / CHECKOUT ────────────────────────────────────
-@main.route("/upgrade/<plan>")
-@login_required
-def upgrade(plan):
-    if plan not in ("pro", "business"):
-        abort(400)
-    if not is_stripe_configured():
-        flash("Payments are not yet enabled. Check back soon!", "info")
-        return redirect(url_for("main.pricing"))
-    url = create_checkout_session(
-        user_id     = session["user_id"],
-        user_email  = session["user_email"],
-        plan        = plan,
-        success_url = request.host_url.rstrip("/") + url_for("main.upgrade_success"),
-        cancel_url  = request.host_url.rstrip("/") + url_for("main.pricing"),
-    )
-    if url:
-        return redirect(url)
-    flash("Could not create checkout session. Please try again.", "danger")
-    return redirect(url_for("main.pricing"))
-
-
-# ── 18. UPGRADE SUCCESS ───────────────────────────────────────
-@main.route("/upgrade/success")
-@login_required
-def upgrade_success():
-    # Stripe webhook will update the plan — just show a nice page
-    flash("🎉 Payment successful! Your plan will be updated shortly.", "success")
-    return redirect(url_for("main.index"))
-
-
-# ── 19. MANAGE BILLING ────────────────────────────────────────
-@main.route("/billing")
-@login_required
-def manage_billing():
-    user = get_user_by_id(session["user_id"])
-    if not user or not user.get("stripe_customer_id"):
-        flash("No active subscription found.", "info")
-        return redirect(url_for("main.pricing"))
-    portal_url = create_portal_session(
-        stripe_customer_id=user["stripe_customer_id"],
-        return_url=request.host_url.rstrip("/") + url_for("main.index"),
-    )
-    if portal_url:
-        return redirect(portal_url)
-    flash("Could not open billing portal. Please contact support.", "danger")
-    return redirect(url_for("main.index"))
-
-
-# ── 20. STRIPE WEBHOOK ────────────────────────────────────────
-@main.route("/webhook/stripe", methods=["POST"])
-def stripe_webhook():
-    event = handle_webhook(request.data, request.headers.get("Stripe-Signature", ""))
-    if not event:
-        return jsonify({"error": "Invalid webhook"}), 400
-
-    etype = event["type"]
-    data  = event["data"]["object"]
-
-    if etype == "checkout.session.completed":
-        user_id     = data.get("metadata", {}).get("user_id")
-        plan        = data.get("metadata", {}).get("plan", "pro")
-        customer_id = data.get("customer")
-        sub_id      = data.get("subscription")
-        if user_id:
-            update_user_plan(int(user_id), plan, customer_id, sub_id)
-
-    elif etype in ("customer.subscription.deleted", "customer.subscription.paused"):
-        customer_id = data.get("customer")
-        user        = get_user_by_stripe_customer(customer_id)
-        if user:
-            cancel_user_plan(user["id"])
-
-    elif etype == "customer.subscription.updated":
-        customer_id = data.get("customer")
-        status      = data.get("status")
-        user        = get_user_by_stripe_customer(customer_id)
-        if user and status == "active":
-            # Determine plan from price ID
-            items   = data.get("items", {}).get("data", [])
-            price_id = items[0]["price"]["id"] if items else ""
-            from app.billing import get_plan_from_price_id
-            plan = get_plan_from_price_id(price_id)
-            update_user_plan(user["id"], plan)
-
-    return jsonify({"status": "ok"})
-
-
-
-# ── HEALTH CHECK (Railway uses this) ─────────────────────────
+# ── 16. HEALTH CHECK ──────────────────────────────────────────
 @main.route("/health")
 def health():
     try:
@@ -428,7 +296,8 @@ def health():
     except Exception as e:
         return {"status": "error", "db": str(e)}, 500
 
-# ── 21. TERMS / ABOUT / MISC ──────────────────────────────────
+
+# ── 17. TERMS / ABOUT / MISC ──────────────────────────────────
 @main.route("/terms")
 def terms():
     return render_template("terms.html")
