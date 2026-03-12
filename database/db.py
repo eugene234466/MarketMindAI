@@ -174,6 +174,26 @@ def get_user_by_id(user_id: int) -> dict | None:
         return None
 
 
+# ── USER USAGE FUNCTIONS ─────────────────────────────────────
+
+def get_user_usage(user_id: int) -> int:
+    """
+    Returns how many research reports a user has generated.
+    Used for usage limits / rate limiting.
+    """
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM research WHERE user_id=%s;",
+                    (user_id,)
+                )
+                row = cur.fetchone()
+                return row[0] if row else 0
+    except Exception as e:
+        print(f"[DB] get_user_usage error: {e}")
+        return 0
+
 def verify_password(plain: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
