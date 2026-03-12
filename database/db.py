@@ -264,3 +264,32 @@ def delete_research(research_id: int) -> bool:
     except Exception as e:
         print(f"[DB] delete_research error: {e}")
         return False
+
+
+
+@main.route('/debug-task')
+def debug_task():
+    """Debug task creation"""
+    results = {}
+    
+    # Check database
+    try:
+        from database.db import get_pool
+        pool = get_pool()
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                results['database'] = 'connected'
+    except Exception as e:
+        results['database'] = f'error: {str(e)}'
+    
+    # Check task queue
+    try:
+        from core.tasks import queue_analysis, task_status
+        test_task = queue_analysis("Debug test", None, None)
+        results['task_creation'] = f'success: {test_task}'
+        results['task_exists'] = test_task in task_status
+    except Exception as e:
+        results['task_creation'] = f'error: {str(e)}'
+    
+    return jsonify(results)
