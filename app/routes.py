@@ -15,11 +15,8 @@ from database.db import (
     save_research, get_history, get_research_by_id,
     create_user, get_user_by_email, verify_password, get_user_by_id,
     delete_research, create_job, complete_job, fail_job, get_job, delete_job,
-    get_user_usage, increment_usage, update_user_plan, cancel_user_plan,
-    get_user_by_stripe_customer,
 )
-from app.plan_utils import can_analyse, can_download_pdf, can_email_report, get_analyses_remaining, get_history_limit
-from app.billing import create_checkout_session, create_portal_session, handle_webhook, is_stripe_configured
+
 from app.cache import get_cached, set_cache, clear_cache, cache_info
 
 main = Blueprint("main", __name__)
