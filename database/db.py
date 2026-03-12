@@ -23,12 +23,30 @@ def get_pool() -> ThreadedConnectionPool:
         if not DATABASE_URL:
             raise RuntimeError("DATABASE_URL not set.")
         _pool = ThreadedConnectionPool(
-            minconn=1, maxconn=10, dsn=DATABASE_URL,
-            keepalives=1, keepalives_idle=30,
-            keepalives_interval=10, keepalives_count=3
+            minconn=1, maxconn=5, dsn=DATABASE_URL,
+            keepalives=1, keepalives_idle=10,
+            keepalives_interval=5, keepalives_count=3
         )
         print("[DB] Connection pool created.")
     return _pool
+
+
+def _is_conn_alive(conn) -> bool:
+    try:
+        conn.cursor().execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
+def _reset_pool():
+    global _pool
+    try:
+        if _pool: _pool.closeall()
+    except Exception:
+        pass
+    _pool = None
+    print("[DB] Pool reset — will reconnect on next request")
 
 
 @contextmanager
@@ -36,15 +54,23 @@ def get_conn():
     for attempt in range(2):
         pool = get_pool()
         conn = pool.getconn()
+
+        # Discard stale connections immediately rather than failing mid-query
+        if not _is_conn_alive(conn):
+            try: pool.putconn(conn, close=True)
+            except Exception: pass
+            _reset_pool()
+            if attempt == 1:
+                raise psycopg2.OperationalError("Could not obtain a live DB connection after retry")
+            continue
+
         try:
             yield conn
             conn.commit()
+            pool.putconn(conn)
             return
-        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-            # Dead connection — silently reset the pool and retry once
-            try: conn.close()
-            except Exception: pass
-            try: pool.putconn(conn)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            try: pool.putconn(conn, close=True)
             except Exception: pass
             _reset_pool()
             if attempt == 1:
@@ -55,17 +81,6 @@ def get_conn():
             try: pool.putconn(conn)
             except Exception: pass
             raise
-
-
-def _reset_pool():
-    global _pool
-    try:
-        if _pool:
-            _pool.closeall()
-    except Exception:
-        pass
-    _pool = None
-    print("[DB] Pool reset due to connection error")
 
 
 # ── INIT ──────────────────────────────────────────────────────
