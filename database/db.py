@@ -33,16 +33,39 @@ def get_pool() -> ThreadedConnectionPool:
 
 @contextmanager
 def get_conn():
-    pool = get_pool()
-    conn = pool.getconn()
+    for attempt in range(2):
+        pool = get_pool()
+        conn = pool.getconn()
+        try:
+            yield conn
+            conn.commit()
+            return
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            # Dead connection — silently reset the pool and retry once
+            try: conn.close()
+            except Exception: pass
+            try: pool.putconn(conn)
+            except Exception: pass
+            _reset_pool()
+            if attempt == 1:
+                raise
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+            try: pool.putconn(conn)
+            except Exception: pass
+            raise
+
+
+def _reset_pool():
+    global _pool
     try:
-        yield conn
-        conn.commit()
+        if _pool:
+            _pool.closeall()
     except Exception:
-        conn.rollback()
-        raise
-    finally:
-        pool.putconn(conn)
+        pass
+    _pool = None
+    print("[DB] Pool reset due to connection error")
 
 
 # ── INIT ──────────────────────────────────────────────────────
@@ -110,23 +133,15 @@ def fail_job(job_id: str, error: str):
             cur.execute("UPDATE jobs SET status='error', error=%s WHERE id=%s;", (error[:500], job_id))
 
 def get_job(job_id: str) -> dict | None:
-    for attempt in range(2):
-        try:
-            with get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute("SELECT * FROM jobs WHERE id=%s;", (job_id,))
-                    row = cur.fetchone()
-                    return dict(row) if row else None
-        except Exception as e:
-            print(f"[DB] get_job error (attempt {attempt+1}): {e}")
-            if attempt == 0:
-                global _pool
-                try:
-                    if _pool: _pool.closeall()
-                except Exception:
-                    pass
-                _pool = None
-    return None
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT * FROM jobs WHERE id=%s;", (job_id,))
+                row = cur.fetchone()
+                return dict(row) if row else None
+    except Exception as e:
+        print(f"[DB] get_job error: {e}")
+        return None
 
 def delete_job(job_id: str):
     try:
