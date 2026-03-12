@@ -1,628 +1,673 @@
-<!-- ============================================================
-BASE.HTML — Base Template
-All pages extend this template
-============================================================ -->
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}MarketMind AI{% endblock %}</title>
-
-    <!-- ── BOOTSTRAP ────────────────────────────────────────-->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-          rel="stylesheet">
-
-    <!-- ── FONT AWESOME ─────────────────────────────────────-->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-          rel="stylesheet">
-
-    <!-- ── GOOGLE FONTS ─────────────────────────────────────-->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
-          rel="stylesheet">
-
-    <!-- ── PLOTLY ───────────────────────────────────────────-->
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
-    <!-- ── BASE STYLES ──────────────────────────────────────-->
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/style.css') }}">
-
-    <style>
-        /* ── GLOBAL ────────────────────────────────────────── */
-        * {
-            box-sizing  : border-box;
-            margin      : 0;
-            padding     : 0;
-        }
-
-        body {
-            font-family : "Inter", sans-serif;
-            background  : #0a1628;
-            color       : #ffffff;
-            min-height  : 100vh;
-        }
-
-        /* ── NAVBAR ────────────────────────────────────────── */
-        .navbar-main {
-            background    : rgba(10, 22, 40, 0.95);
-            border-bottom : 1px solid rgba(0, 229, 255, 0.15);
-            padding       : 12px 0;
-            position      : sticky;
-            top           : 0;
-            z-index       : 1000;
-            backdrop-filter: blur(10px);
-        }
-
-        .navbar-brand-wrap {
-            display     : flex;
-            align-items : center;
-            gap         : 10px;
-            text-decoration: none;
-        }
-
-        .navbar-brand-wrap img {
-            width         : 38px;
-            border-radius : 8px;
-            box-shadow    : 0 0 15px rgba(0,229,255,0.3);
-        }
-
-        .navbar-brand-wrap span {
-            font-size   : 1.2rem;
-            font-weight : 800;
-            color       : #ffffff;
-        }
-
-        .navbar-brand-wrap span em {
-            color      : #00e5ff;
-            font-style : normal;
-        }
-
-        /* ── NAV LINKS ─────────────────────────────────────── */
-        .nav-links {
-            display     : flex;
-            align-items : center;
-            gap         : 5px;
-            list-style  : none;
-            margin      : 0;
-            padding     : 0;
-        }
-
-        .nav-links a {
-            color           : rgba(255,255,255,0.6);
-            text-decoration : none;
-            font-size       : 0.9rem;
-            font-weight     : 500;
-            padding         : 8px 14px;
-            border-radius   : 8px;
-            transition      : all 0.3s ease;
-            display         : flex;
-            align-items     : center;
-            gap             : 6px;
-        }
-
-        .nav-links a:hover,
-        .nav-links a.active {
-            color      : #00e5ff;
-            background : rgba(0,229,255,0.08);
-        }
-
-        /* ── USER DROPDOWN ─────────────────────────────────── */
-        .user-dropdown {
-            position : relative;
-        }
-
-        .user-btn {
-            display         : flex;
-            align-items     : center;
-            gap             : 8px;
-            background      : rgba(0,229,255,0.08);
-            border          : 1px solid rgba(0,229,255,0.2);
-            border-radius   : 50px;
-            padding         : 7px 16px;
-            color           : #ffffff;
-            font-size       : 0.88rem;
-            font-weight     : 600;
-            cursor          : pointer;
-            transition      : all 0.3s ease;
-        }
-
-        .user-btn:hover {
-            background   : rgba(0,229,255,0.15);
-            border-color : #00e5ff;
-        }
-
-        .user-btn .avatar {
-            width           : 28px;
-            height          : 28px;
-            background      : #00e5ff;
-            color           : #0a1628;
-            border-radius   : 50%;
-            display         : flex;
-            align-items     : center;
-            justify-content : center;
-            font-weight     : 800;
-            font-size       : 0.8rem;
-        }
-
-        .dropdown-menu-custom {
-            display       : none;
-            position      : absolute;
-            right         : 0;
-            top           : calc(100% + 8px);
-            background    : #0d1f38;
-            border        : 1px solid rgba(0,229,255,0.2);
-            border-radius : 12px;
-            min-width     : 200px;
-            overflow      : hidden;
-            box-shadow    : 0 10px 40px rgba(0,0,0,0.4);
-            z-index       : 999;
-        }
-
-        .dropdown-menu-custom.show {
-            display : block;
-            animation: dropDown 0.2s ease;
-        }
-
-        @keyframes dropDown {
-            from { opacity: 0; transform: translateY(-8px); }
-            to   { opacity: 1; transform: translateY(0);    }
-        }
-
-        .dropdown-header {
-            padding    : 15px 18px 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
-        }
-
-        .dropdown-header .name {
-            color      : #ffffff;
-            font-weight: 700;
-            font-size  : 0.9rem;
-        }
-
-        .dropdown-header .email {
-            color    : rgba(255,255,255,0.35);
-            font-size: 0.78rem;
-            margin-top: 2px;
-        }
-
-        .dropdown-item-custom {
-            display         : flex;
-            align-items     : center;
-            gap             : 10px;
-            padding         : 11px 18px;
-            color           : rgba(255,255,255,0.65);
-            text-decoration : none;
-            font-size       : 0.88rem;
-            transition      : all 0.2s ease;
-        }
-
-        .dropdown-item-custom:hover {
-            background : rgba(0,229,255,0.08);
-            color      : #00e5ff;
-        }
-
-        .dropdown-item-custom i {
-            width      : 16px;
-            text-align : center;
-            color      : #00e5ff;
-        }
-
-        .dropdown-divider-custom {
-            border-top : 1px solid rgba(255,255,255,0.06);
-            margin     : 4px 0;
-        }
-
-        .dropdown-item-custom.logout {
-            color : rgba(255,100,100,0.7);
-        }
-
-        .dropdown-item-custom.logout i {
-            color : #ff6b6b;
-        }
-
-        .dropdown-item-custom.logout:hover {
-            background : rgba(255,50,50,0.08);
-            color      : #ff6b6b;
-        }
-
-        /* ── AUTH BUTTONS (logged out) ─────────────────────── */
-        .btn-nav-login {
-            color           : rgba(255,255,255,0.7);
-            text-decoration : none;
-            font-size       : 0.9rem;
-            font-weight     : 600;
-            padding         : 8px 18px;
-            border-radius   : 8px;
-            transition      : all 0.3s;
-        }
-
-        .btn-nav-login:hover {
-            color      : #00e5ff;
-            background : rgba(0,229,255,0.08);
-        }
-
-        .btn-nav-register {
-            background      : #00e5ff;
-            color           : #0a1628;
-            text-decoration : none;
-            font-size       : 0.9rem;
-            font-weight     : 700;
-            padding         : 8px 20px;
-            border-radius   : 50px;
-            transition      : all 0.3s;
-        }
-
-        .btn-nav-register:hover {
-            background : #ffffff;
-            color      : #0a1628;
-            transform  : translateY(-1px);
-        }
-
-        /* ── HAMBURGER ─────────────────────────────────────── */
-        .hamburger {
-            display    : none;
-            background : none;
-            border     : none;
-            color      : #ffffff;
-            font-size  : 1.3rem;
-            cursor     : pointer;
-            padding    : 5px;
-        }
-
-        /* ── MOBILE MENU ───────────────────────────────────── */
-        .mobile-menu {
-            display    : none;
-            background : #0d1f38;
-            border-top : 1px solid rgba(0,229,255,0.1);
-            padding    : 15px 20px;
-        }
-
-        .mobile-menu.open { display: block; }
-
-        .mobile-menu a {
-            display         : block;
-            color           : rgba(255,255,255,0.7);
-            text-decoration : none;
-            padding         : 10px 0;
-            font-size       : 0.95rem;
-            border-bottom   : 1px solid rgba(255,255,255,0.05);
-            transition      : color 0.3s;
-        }
-
-        .mobile-menu a:hover { color: #00e5ff; }
-
-        /* ── FLASH MESSAGES ────────────────────────────────── */
-        .flash-container {
-            position : fixed;
-            top      : 70px;
-            right    : 20px;
-            z-index  : 9999;
-            max-width: 350px;
-        }
-
-        .flash-toast {
-            padding       : 14px 18px;
-            border-radius : 12px;
-            margin-bottom : 10px;
-            font-size     : 0.9rem;
-            font-weight   : 500;
-            display       : flex;
-            align-items   : center;
-            gap           : 10px;
-            animation     : slideIn 0.3s ease;
-            box-shadow    : 0 8px 25px rgba(0,0,0,0.3);
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(20px); }
-            to   { opacity: 1; transform: translateX(0);    }
-        }
-
-        .flash-toast.success {
-            background : rgba(0,255,100,0.12);
-            border     : 1px solid rgba(0,255,100,0.3);
-            color      : #00ff64;
-        }
-
-        .flash-toast.danger {
-            background : rgba(255,50,50,0.12);
-            border     : 1px solid rgba(255,50,50,0.3);
-            color      : #ff6b6b;
-        }
-
-        .flash-toast.warning {
-            background : rgba(255,200,0,0.12);
-            border     : 1px solid rgba(255,200,0,0.3);
-            color      : #ffc800;
-        }
-
-        .flash-toast.info {
-            background : rgba(0,229,255,0.12);
-            border     : 1px solid rgba(0,229,255,0.3);
-            color      : #00e5ff;
-        }
-
-        .flash-close {
-            margin-left : auto;
-            cursor      : pointer;
-            opacity     : 0.6;
-            background  : none;
-            border      : none;
-            color       : inherit;
-            font-size   : 0.85rem;
-        }
-
-        /* ── MAIN CONTENT ──────────────────────────────────── */
-        .main-content {
-            min-height : calc(100vh - 65px);
-            padding    : 30px 0;
-        }
-
-        /* ── CARD ──────────────────────────────────────────── */
-        .card-custom {
-            background    : rgba(255,255,255,0.03);
-            border        : 1px solid rgba(0,229,255,0.15);
-            border-radius : 15px;
-            transition    : all 0.3s ease;
-        }
-
-        .card-custom:hover {
-            border-color : rgba(0,229,255,0.3);
-            box-shadow   : 0 8px 30px rgba(0,229,255,0.1);
-        }
-
-        /* ── FOOTER ────────────────────────────────────────── */
-        .footer-main {
-            background    : rgba(10,22,40,0.8);
-            border-top    : 1px solid rgba(0,229,255,0.1);
-            padding       : 20px 0;
-            text-align    : center;
-            color         : rgba(255,255,255,0.3);
-            font-size     : 0.85rem;
-        }
-
-        /* ── RESPONSIVE ────────────────────────────────────── */
-        @media (max-width: 768px) {
-            .nav-links     { display: none; }
-            .hamburger     { display: block; }
-            .desktop-auth  { display: none; }
-        }
-    </style>
-
-    {% block extra_head %}{% endblock %}
-</head>
-
-<body>
-
-<!-- ── NAVBAR ────────────────────────────────────────────────-->
-<nav class="navbar-main">
-    <div class="container d-flex align-items-center justify-content-between">
-
-        <!-- Brand -->
-        <a href="{{ url_for('main.index') if session.get('user_id') else url_for('main.intro') }}"
-           class="navbar-brand-wrap">
-            <img src="{{ url_for('static', filename='images/logo2.jpg') }}"
-                 alt="MarketMind AI">
-            <span>Market<em>Mind</em> AI</span>
-        </a>
-
-        <!-- Nav Links (desktop) -->
-        {% if session.get("user_id") %}
-        <ul class="nav-links">
-            <li>
-                <a href="{{ url_for('main.index') }}"
-                   class="{{ 'active' if request.endpoint == 'main.index' }}">
-                    <i class="fas fa-home"></i> Home
-                </a>
-            </li>
-            <li>
-                <a href="{{ url_for('main.history') }}"
-                   class="{{ 'active' if request.endpoint == 'main.history' }}">
-                    <i class="fas fa-history"></i> History
-                </a>
-            </li>
-            <li>
-                <a href="{{ url_for('main.about') }}"
-                   class="{{ 'active' if request.endpoint == 'main.about' }}">
-                    <i class="fas fa-info-circle"></i> About
-                </a>
-            </li>
-        </ul>
-        {% endif %}
-
-        <!-- Right Side -->
-        <div class="d-flex align-items-center gap-3 desktop-auth">
-
-            {% if session.get("user_id") %}
-            <!-- ── LOGGED IN — USER DROPDOWN ──────────────── -->
-            <div class="user-dropdown" id="userDropdown">
-                <button class="user-btn" onclick="toggleDropdown()">
-                    <div class="avatar">
-                        {{ session.get("user_name", "U")[0].upper() }}
-                    </div>
-                    {{ session.get("user_name", "User").split()[0] }}
-                    <i class="fas fa-chevron-down"
-                       style="font-size:0.7rem; opacity:0.6"></i>
-                </button>
-
-                <div class="dropdown-menu-custom" id="dropdownMenu">
-                    <!-- User Info -->
-                    <div class="dropdown-header">
-                        <div class="name">
-                            {{ session.get("user_name", "User") }}
-                        </div>
-                        <div class="email">
-                            {{ session.get("user_email", "") }}
-                        </div>
-                    </div>
-
-                    <!-- Menu Items -->
-                    <a href="{{ url_for('main.index') }}"
-                       class="dropdown-item-custom">
-                        <i class="fas fa-search"></i> New Analysis
-                    </a>
-                    <a href="{{ url_for('main.history') }}"
-                       class="dropdown-item-custom">
-                        <i class="fas fa-history"></i> My Research
-                    </a>
-                    <a href="{{ url_for('main.about') }}"
-                       class="dropdown-item-custom">
-                        <i class="fas fa-info-circle"></i> About
-                    </a>
-
-                    <div class="dropdown-divider-custom"></div>
-
-                    <a href="{{ url_for('main.logout') }}"
-                       class="dropdown-item-custom logout">
-                        <i class="fas fa-sign-out-alt"></i> Sign Out
-                    </a>
-                </div>
-            </div>
-
-            {% else %}
-            <!-- ── LOGGED OUT — AUTH BUTTONS ──────────────── -->
-            <a href="{{ url_for('main.login') }}"
-               class="btn-nav-login">
-                Sign In
-            </a>
-            <a href="{{ url_for('main.register') }}"
-               class="btn-nav-register">
-                Get Started
-            </a>
-            {% endif %}
-
+{% extends "base.html" %}
+{% block title %}Dashboard — {{ results.idea }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ── BASE ───────────────────────────────────────────────── */
+    * { -webkit-tap-highlight-color: transparent; }
+
+    /* ── SECTION CARD ───────────────────────────────────────── */
+    .section-card {
+        background    : rgba(255,255,255,0.03);
+        border        : 1px solid rgba(0,229,255,0.15);
+        border-radius : 16px;
+        padding       : 20px;
+        margin-bottom : 16px;
+    }
+    @media (min-width: 768px) {
+        .section-card { padding: 28px; margin-bottom: 24px; border-radius: 20px; }
+    }
+    .section-title {
+        color: #00e5ff; font-weight: 700; font-size: 0.95rem;
+        margin-bottom: 16px; padding-bottom: 12px;
+        border-bottom: 1px solid rgba(0,229,255,0.15);
+        display: flex; align-items: center; gap: 8px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    @media (min-width: 768px) { .section-title { font-size: 1rem; } }
+
+    /* ── VERDICT ─────────────────────────────────────────────── */
+    .verdict-banner {
+        border-radius: 16px; padding: 24px 20px;
+        text-align: center; margin-bottom: 16px;
+    }
+    @media (min-width: 768px) { .verdict-banner { padding: 36px; border-radius: 20px; } }
+    .verdict-banner.go   { background: linear-gradient(135deg,rgba(0,200,100,0.12),rgba(0,229,255,0.08)); border: 2px solid rgba(0,200,100,0.4); }
+    .verdict-banner.nogo { background: linear-gradient(135deg,rgba(255,50,50,0.12),rgba(255,100,50,0.08)); border: 2px solid rgba(255,50,50,0.4); }
+    .verdict-badge {
+        display: inline-flex; align-items: center; gap: 10px;
+        font-size: 1.6rem; font-weight: 800;
+        padding: 12px 32px; border-radius: 50px; margin-bottom: 12px;
+    }
+    @media (min-width: 768px) { .verdict-badge { font-size: 2rem; padding: 14px 44px; } }
+    .verdict-badge.go   { background: rgba(0,200,100,0.15); color: #00ff64; border: 2px solid #00ff64; }
+    .verdict-badge.nogo { background: rgba(255,50,50,0.15);  color: #ff4444; border: 2px solid #ff4444; }
+    .verdict-reason { color: rgba(255,255,255,0.7); font-size: 0.95rem; line-height: 1.7; }
+    @media (min-width: 768px) { .verdict-reason { font-size: 1.05rem; } }
+
+    /* ── KPI CARDS ───────────────────────────────────────────── */
+    .kpi-card {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(0,229,255,0.2);
+        border-radius: 14px; padding: 16px 12px;
+        text-align: center; height: 100%;
+        transition: all 0.3s;
+    }
+    @media (min-width: 768px) { .kpi-card { padding: 22px; border-radius: 16px; } }
+    .kpi-card:hover { border-color: #00e5ff; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,229,255,0.15); }
+    .kpi-value { font-size: 1.3rem; font-weight: 700; color: #00e5ff; line-height: 1.2; }
+    @media (min-width: 768px) { .kpi-value { font-size: 1.8rem; } }
+    .kpi-label { color: rgba(255,255,255,0.55); font-size: 0.72rem; margin-top: 5px; }
+    @media (min-width: 768px) { .kpi-label { font-size: 0.82rem; } }
+
+    /* ── CHART WRAPPER ───────────────────────────────────────── */
+    .chart-wrap {
+        width: 100%; overflow: hidden;
+        border-radius: 10px; background: rgba(0,0,0,0.15);
+    }
+    .chart-inner { width: 100%; }
+
+    /* ── SUMMARY ─────────────────────────────────────────────── */
+    .summary-text {
+        font-size: 0.93rem; line-height: 1.8;
+        color: rgba(255,255,255,0.75);
+        border-left: 3px solid #00e5ff;
+        padding-left: 16px; margin-bottom: 18px;
+    }
+
+    /* ── RECS ────────────────────────────────────────────────── */
+    .rec-item {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 12px; border-radius: 10px; margin-bottom: 8px;
+        background: rgba(0,229,255,0.04); border: 1px solid rgba(0,229,255,0.1);
+        transition: all 0.2s;
+    }
+    .rec-item:hover { background: rgba(0,229,255,0.08); }
+    .rec-number {
+        background: #00e5ff; color: #0a1628; font-weight: 800;
+        font-size: 0.78rem; width: 24px; height: 24px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .rec-text { color: rgba(255,255,255,0.8); font-size: 0.88rem; line-height: 1.5; }
+
+    /* ── RISKS ───────────────────────────────────────────────── */
+    .risk-item {
+        display: flex; align-items: flex-start; gap: 10px;
+        padding: 11px; border-radius: 10px; margin-bottom: 7px;
+        background: rgba(255,50,50,0.05); border: 1px solid rgba(255,50,50,0.15);
+    }
+    .risk-icon { color: #ff6b6b; font-size: 0.82rem; margin-top: 2px; flex-shrink: 0; }
+    .risk-text { color: rgba(255,255,255,0.7); font-size: 0.87rem; }
+
+    /* ── COMPETITORS ─────────────────────────────────────────── */
+    .comp-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(0,229,255,0.1);
+        border-radius: 12px; padding: 14px; margin-bottom: 10px;
+    }
+    .comp-name { color: #fff; font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; }
+    .comp-badge { font-size: 0.75rem; padding: 3px 10px; border-radius: 50px; font-weight: 600; }
+    .comp-share { color: #00e5ff; font-weight: 700; font-size: 0.88rem; }
+    .comp-meta { color: rgba(255,255,255,0.5); font-size: 0.8rem; line-height: 1.5; }
+    .comp-label { color: rgba(255,255,255,0.35); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Desktop competitor table */
+    .competitor-table { background: transparent; color: #fff; }
+    .competitor-table th { color: #00e5ff; border-color: rgba(0,229,255,0.2); font-size: 0.82rem; }
+    .competitor-table td { border-color: rgba(255,255,255,0.05); vertical-align: middle; font-size: 0.87rem; }
+
+    /* ── NICHES ──────────────────────────────────────────────── */
+    .niche-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(0,229,255,0.12);
+        border-radius: 12px; padding: 14px; margin-bottom: 10px;
+        transition: all 0.3s;
+    }
+    .niche-card:hover { border-color: rgba(0,229,255,0.3); }
+    .niche-bar      { background: rgba(255,255,255,0.08); border-radius: 50px; height: 6px; margin: 6px 0; }
+    .niche-bar-fill { background: linear-gradient(90deg,#00e5ff,#00ff64); border-radius: 50px; height: 6px; transition: width 1.2s ease; }
+
+    /* ── PRICING ─────────────────────────────────────────────── */
+    .pricing-card {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(0,229,255,0.15);
+        border-radius: 14px; padding: 20px 14px;
+        text-align: center; height: 100%; transition: all 0.3s;
+    }
+    .pricing-card:hover { border-color: #00e5ff; transform: translateY(-2px); }
+    .pricing-tier  { color: rgba(255,255,255,0.5); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .pricing-value { color: #00e5ff; font-size: 1.25rem; font-weight: 700; }
+    @media (min-width: 768px) { .pricing-value { font-size: 1.5rem; } }
+
+    /* ── FORECAST STATS ──────────────────────────────────────── */
+    .forecast-stat {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(0,229,255,0.15);
+        border-radius: 12px; padding: 14px;
+        text-align: center;
+    }
+    .forecast-stat-value { font-size: 1.1rem; font-weight: 700; color: #00e5ff; }
+    @media (min-width: 768px) { .forecast-stat-value { font-size: 1.4rem; } }
+    .forecast-stat-label { color: rgba(255,255,255,0.5); font-size: 0.72rem; margin-top: 4px; }
+
+    /* ── BUTTONS ─────────────────────────────────────────────── */
+    .btn-cta {
+        background: #00e5ff; color: #0a1628; font-weight: 700;
+        padding: 12px 24px; border-radius: 50px; border: none;
+        cursor: pointer; transition: all 0.3s; font-size: 0.9rem;
+        width: 100%; display: block; text-align: center;
+    }
+    .btn-cta:hover { background: #fff; box-shadow: 0 8px 24px rgba(0,229,255,0.3); }
+    .btn-outline-cta {
+        background: transparent; color: #00e5ff; font-weight: 700;
+        padding: 12px 24px; border-radius: 50px; border: 2px solid #00e5ff;
+        cursor: pointer; transition: all 0.3s; font-size: 0.9rem;
+        width: 100%; display: block; text-align: center;
+    }
+    .btn-outline-cta:hover { background: rgba(0,229,255,0.1); }
+    .email-input {
+        background: rgba(255,255,255,0.05); border: 1px solid rgba(0,229,255,0.3);
+        border-radius: 50px; color: #fff; padding: 12px 18px; font-size: 0.88rem;
+        outline: none; transition: all 0.3s; width: 100%;
+    }
+    .email-input:focus { border-color: #00e5ff; box-shadow: 0 0 12px rgba(0,229,255,0.2); }
+    .email-input::placeholder { color: rgba(255,255,255,0.3); }
+
+    /* ── TARGET TAG ──────────────────────────────────────────── */
+    .target-tag {
+        display: inline-block; background: rgba(0,229,255,0.08);
+        border: 1px solid rgba(0,229,255,0.2); border-radius: 50px;
+        color: #00e5ff; font-size: 0.8rem; padding: 5px 14px; margin-top: 10px;
+    }
+    .cache-badge {
+        background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.3);
+        border-radius: 50px; color: #00e5ff; font-size: 0.72rem; padding: 2px 10px; margin-left: 8px;
+    }
+    .empty-section { text-align: center; padding: 28px; color: rgba(255,255,255,0.25); }
+
+    /* ── HEADER STACK ON MOBILE ───────────────────────────────── */
+    .dash-header { margin-bottom: 16px; }
+    @media (max-width: 575px) {
+        .dash-header { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+        .dash-header .btn-cta { width: auto; padding: 10px 20px; }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<!-- ── HEADER ─────────────────────────────────────────────────-->
+<div class="d-flex justify-content-between align-items-center dash-header flex-wrap gap-3">
+    <div>
+        <h2 class="text-white mb-1" style="font-size:1.35rem;font-weight:800;">
+            <i class="fas fa-chart-line" style="color:#00e5ff"></i>
+            Market Analysis
+            {% if results.get('from_cache') %}<span class="cache-badge">⚡ Cached</span>{% endif %}
+        </h2>
+        <p class="text-white-50 mb-0" style="font-size:0.85rem;">
+            💡 <strong class="text-white">{{ results.idea }}</strong>
+            {% if results.created_at %}&nbsp;·&nbsp;<small>{{ results.created_at }}</small>{% endif %}
+        </p>
+    </div>
+    <button onclick="downloadPDF()" class="btn-cta" id="pdfBtn" style="width:auto;">
+        <i class="fas fa-file-pdf"></i> PDF Report
+    </button>
+</div>
+
+
+<!-- ── VERDICT ────────────────────────────────────────────────-->
+{% set verdict = results.ai_insights.get('verdict','GO') %}
+<div class="verdict-banner {{ 'go' if verdict=='GO' else 'nogo' }}">
+    <div class="verdict-badge {{ 'go' if verdict=='GO' else 'nogo' }}">
+        <i class="fas fa-{{ 'check' if verdict=='GO' else 'times' }}-circle"></i>
+        {{ verdict }}
+    </div>
+    <p class="verdict-reason">{{ results.ai_insights.get('verdict_reason','') }}</p>
+</div>
+
+
+<!-- ── KPI ROW ────────────────────────────────────────────────-->
+<div class="row g-2 g-md-3 mb-3 mb-md-4">
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-value">{{ results.market_data.get('market_size','N/A') }}</div>
+            <div class="kpi-label"><i class="fas fa-globe"></i> Market Size</div>
         </div>
-
-        <!-- Hamburger (mobile) -->
-        <button class="hamburger" onclick="toggleMobileMenu()">
-            <i class="fas fa-bars" id="hamburgerIcon"></i>
-        </button>
-
     </div>
-
-    <!-- ── MOBILE MENU ────────────────────────────────────── -->
-    <div class="mobile-menu" id="mobileMenu">
-        {% if session.get("user_id") %}
-            <a href="{{ url_for('main.index') }}">
-                <i class="fas fa-home"></i> Home
-            </a>
-            <a href="{{ url_for('main.history') }}">
-                <i class="fas fa-history"></i> History
-            </a>
-            <a href="{{ url_for('main.about') }}">
-                <i class="fas fa-info-circle"></i> About
-            </a>
-            <a href="{{ url_for('main.logout') }}"
-               style="color:#ff6b6b;">
-                <i class="fas fa-sign-out-alt"></i> Sign Out
-            </a>
-        {% else %}
-            <a href="{{ url_for('main.login') }}">
-                <i class="fas fa-sign-in-alt"></i> Sign In
-            </a>
-            <a href="{{ url_for('main.register') }}">
-                <i class="fas fa-user-plus"></i> Get Started
-            </a>
-        {% endif %}
-    </div>
-
-</nav>
-
-
-<!-- ── FLASH TOASTS ──────────────────────────────────────────-->
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="flash-container" id="flashContainer">
-        {% for category, message in messages %}
-        <div class="flash-toast {{ category }}">
-            {% if category == "success" %}
-                <i class="fas fa-check-circle"></i>
-            {% elif category == "danger" %}
-                <i class="fas fa-exclamation-circle"></i>
-            {% elif category == "warning" %}
-                <i class="fas fa-exclamation-triangle"></i>
-            {% else %}
-                <i class="fas fa-info-circle"></i>
-            {% endif %}
-            {{ message }}
-            <button class="flash-close"
-                    onclick="this.parentElement.remove()">
-                <i class="fas fa-times"></i>
-            </button>
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-value">{{ results.market_data.get('competition_level','N/A') }}</div>
+            <div class="kpi-label"><i class="fas fa-users"></i> Competition</div>
         </div>
-        {% endfor %}
     </div>
-    {% endif %}
-{% endwith %}
-
-
-<!-- ── MAIN CONTENT ──────────────────────────────────────────-->
-<div class="main-content">
-    <div class="container">
-        {% block content %}{% endblock %}
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-value">{{ results.market_data.get('profit_potential','N/A') }}</div>
+            <div class="kpi-label"><i class="fas fa-dollar-sign"></i> Profit</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-value">{{ results.market_data.get('trend_score','N/A') }}/10</div>
+            <div class="kpi-label"><i class="fas fa-arrow-trend-up"></i> Trend Score</div>
+        </div>
     </div>
 </div>
 
 
-<!-- ── FOOTER ────────────────────────────────────────────────-->
-<footer class="footer-main">
-    <div class="container">
-        <span>
-            &copy; 2026 MarketMind AI &nbsp;|&nbsp;
-            Built in Ghana 🇬🇭 &nbsp;|&nbsp;
-            Powered by Gemini AI
-        </span>
+<!-- ── AI INSIGHTS ────────────────────────────────────────────-->
+<div class="section-card">
+    <div class="section-title"><i class="fas fa-brain"></i> AI Insights</div>
+
+    <p class="summary-text">{{ results.ai_insights.get('summary','Analysis unavailable.') }}</p>
+
+    {% if results.ai_insights.get('target_market') %}
+    <div class="mb-3">
+        <div class="target-tag"><i class="fas fa-crosshairs"></i> {{ results.ai_insights.target_market }}</div>
     </div>
-</footer>
+    {% endif %}
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-7">
+            <h6 style="color:#00e5ff;margin-bottom:12px;font-size:0.88rem;">
+                <i class="fas fa-list-check"></i> Recommendations
+            </h6>
+            {% for rec in results.ai_insights.get('recommendations',[]) %}
+            <div class="rec-item">
+                <div class="rec-number">{{ loop.index }}</div>
+                <div class="rec-text">{{ rec }}</div>
+            </div>
+            {% else %}
+            <p class="text-white-50 small">No recommendations available.</p>
+            {% endfor %}
+        </div>
+        <div class="col-md-5">
+            <h6 style="color:#ff6b6b;margin-bottom:12px;font-size:0.88rem;">
+                <i class="fas fa-triangle-exclamation"></i> Key Risks
+            </h6>
+            {% for risk in results.ai_insights.get('key_risks',[]) %}
+            <div class="risk-item">
+                <i class="fas fa-circle-exclamation risk-icon"></i>
+                <div class="risk-text">{{ risk }}</div>
+            </div>
+            {% else %}
+            <p class="text-white-50 small">No risk data available.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
 
 
-<!-- ── BOOTSTRAP JS ──────────────────────────────────────────-->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- ── MARKET TRENDS CHART ────────────────────────────────────-->
+<div class="section-card">
+    <div class="section-title"><i class="fas fa-chart-line"></i> Market Trends (12 Months)</div>
+    <div class="chart-wrap">
+        <div id="trendsChart" class="chart-inner"></div>
+    </div>
+</div>
 
+
+<!-- ── SALES FORECAST ─────────────────────────────────────────-->
+<div class="section-card">
+    <div class="section-title"><i class="fas fa-dollar-sign"></i> 12-Month Sales Forecast</div>
+    <div class="chart-wrap">
+        <div id="salesChart" class="chart-inner"></div>
+    </div>
+    <div class="row g-2 g-md-3 mt-2">
+        <div class="col-4">
+            <div class="forecast-stat">
+                <div class="forecast-stat-value">
+                    ${{ "{:,}".format(results.sales_forecast.get('total_year',0)) }}
+                </div>
+                <div class="forecast-stat-label">Annual Revenue</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="forecast-stat">
+                <div class="forecast-stat-value" style="color:#00ff64;">
+                    {{ results.sales_forecast.get('growth_rate','N/A') }}
+                </div>
+                <div class="forecast-stat-label">Growth Rate</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="forecast-stat">
+                <div class="forecast-stat-value" style="color:#ffc800;font-size:0.85rem;">
+                    {{ results.sales_forecast.get('peak_month','N/A') }}
+                </div>
+                <div class="forecast-stat-label">Peak Month</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ── PRICING ────────────────────────────────────────────────-->
+<div class="section-card">
+    <div class="section-title"><i class="fas fa-tag"></i> Pricing Strategy</div>
+    <div class="row g-2 g-md-3">
+        <div class="col-4">
+            <div class="pricing-card">
+                <div class="pricing-tier">💰 Budget</div>
+                <div class="pricing-value">{{ results.ai_insights.get('pricing',{}).get('budget','N/A') }}</div>
+                <small class="text-white-50 d-block mt-2" style="font-size:0.72rem;">Entry-level</small>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="pricing-card" style="border-color:rgba(0,229,255,0.3);">
+                <div class="pricing-tier">⭐ Mid</div>
+                <div class="pricing-value">{{ results.ai_insights.get('pricing',{}).get('mid','N/A') }}</div>
+                <small class="text-white-50 d-block mt-2" style="font-size:0.72rem;">Recommended</small>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="pricing-card">
+                <div class="pricing-tier">👑 Premium</div>
+                <div class="pricing-value">{{ results.ai_insights.get('pricing',{}).get('premium','N/A') }}</div>
+                <small class="text-white-50 d-block mt-2" style="font-size:0.72rem;">High-end</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ── COMPETITORS ────────────────────────────────────────────-->
+<div class="section-card">
+    <div class="section-title"><i class="fas fa-users"></i> Competitor Analysis</div>
+    {% if results.competitors %}
+
+    <!-- Mobile cards -->
+    <div class="d-md-none">
+        {% for c in results.competitors %}
+        <div class="comp-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="comp-name">{{ c.name }}</div>
+                <div>
+                    {% if c.threat == "High" %}
+                        <span class="badge bg-danger comp-badge">High Risk</span>
+                    {% elif c.threat == "Medium" %}
+                        <span class="badge bg-warning text-dark comp-badge">Med Risk</span>
+                    {% else %}
+                        <span class="badge bg-success comp-badge">Low Risk</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="comp-share mb-2">{{ c.market_share }}</div>
+            {% if c.get('strength') %}
+            <div class="mb-1"><span class="comp-label">Strength · </span><span class="comp-meta">{{ c.strength }}</span></div>
+            {% endif %}
+            {% if c.get('weakness') %}
+            <div><span class="comp-label">Weakness · </span><span class="comp-meta">{{ c.weakness }}</span></div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Desktop table -->
+    <div class="d-none d-md-block table-responsive">
+        <table class="table competitor-table">
+            <thead>
+                <tr>
+                    <th>Competitor</th><th>Market Share</th>
+                    <th>Strength</th><th>Weakness</th><th>Threat</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in results.competitors %}
+                <tr>
+                    <td><strong>{{ c.name }}</strong></td>
+                    <td>{{ c.market_share }}</td>
+                    <td class="text-white-50">{{ c.get('strength','N/A') }}</td>
+                    <td class="text-white-50">{{ c.get('weakness','N/A') }}</td>
+                    <td>
+                        {% if c.threat == "High" %}
+                            <span class="badge bg-danger">High</span>
+                        {% elif c.threat == "Medium" %}
+                            <span class="badge bg-warning text-dark">Medium</span>
+                        {% else %}
+                            <span class="badge bg-success">Low</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% else %}
+    <div class="empty-section">
+        <i class="fas fa-search fa-2x mb-3" style="color:rgba(0,229,255,0.3)"></i>
+        <p>No competitor data found.</p>
+    </div>
+    {% endif %}
+</div>
+
+
+<!-- ── NICHE OPPORTUNITIES ────────────────────────────────────-->
+<div class="section-card">
+    <div class="section-title"><i class="fas fa-lightbulb"></i> Niche Opportunities</div>
+    {% if results.niches %}
+        {% for niche in results.niches %}
+        <div class="niche-card">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-white fw-bold" style="font-size:0.9rem;">{{ niche.name }}</span>
+                <span style="color:#00e5ff;font-weight:700;font-size:0.88rem;">{{ niche.score }}/100</span>
+            </div>
+            <div class="niche-bar">
+                <div class="niche-bar-fill" style="width:{{ niche.score }}%"></div>
+            </div>
+            <small class="text-white-50 d-block mt-1" style="font-size:0.8rem;">{{ niche.description }}</small>
+            {% if niche.get('audience') %}
+            <small style="color:rgba(0,229,255,0.6);font-size:0.78rem;">
+                <i class="fas fa-user-group"></i> {{ niche.audience }}
+            </small>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="empty-section">
+        <i class="fas fa-lightbulb fa-2x mb-3" style="color:rgba(0,229,255,0.3)"></i>
+        <p>No niche data found.</p>
+    </div>
+    {% endif %}
+</div>
+
+
+<!-- ── EXPORT ─────────────────────────────────────────────────-->
+<div class="section-card">
+    <div class="section-title"><i class="fas fa-share-alt"></i> Export Report</div>
+    <div class="row g-3">
+        <div class="col-12 col-md-4">
+            <button onclick="downloadPDF()" class="btn-cta" id="pdfBtn2">
+                <i class="fas fa-file-pdf"></i> Download PDF
+            </button>
+        </div>
+        <div class="col-12 col-md-5">
+            <input type="email" id="emailInput" class="email-input mb-2" placeholder="Enter email address">
+            <button onclick="emailReport()" class="btn-outline-cta" id="emailBtn">
+                <i class="fas fa-envelope"></i> Email Report
+            </button>
+        </div>
+        <div class="col-12 col-md-3">
+            <a href="{{ url_for('main.index') }}" class="btn-outline-cta" style="border-color:rgba(255,255,255,0.2);color:rgba(255,255,255,0.6);">
+                <i class="fas fa-redo"></i> New Analysis
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_scripts %}
 <script>
-    // ── 1. USER DROPDOWN ─────────────────────────────────────
-    function toggleDropdown() {
-        document.getElementById("dropdownMenu").classList.toggle("show");
+    const resultsData = {{ results | tojson | safe }};
+    const isMobile    = window.innerWidth < 600;
+
+    // ── SHARED LAYOUT ─────────────────────────────────────────
+    const baseLayout = {
+        paper_bgcolor : "transparent",
+        plot_bgcolor  : "transparent",
+        font          : { color: "#ffffff", family: "Inter, Arial", size: isMobile ? 10 : 12 },
+        xaxis: {
+            gridcolor   : "rgba(255,255,255,0.06)",
+            zeroline    : false,
+            tickangle   : isMobile ? -45 : 0,
+            tickfont    : { size: isMobile ? 9 : 11 },
+            automargin  : true,
+        },
+        yaxis: {
+            gridcolor   : "rgba(255,255,255,0.06)",
+            zeroline    : false,
+            tickfont    : { size: isMobile ? 9 : 11 },
+            automargin  : true,
+        },
+        margin        : isMobile
+            ? { t: 10, b: 60, l: 44, r: 8 }
+            : { t: 15, b: 44, l: 60, r: 15 },
+        hoverlabel    : { bgcolor: "#0d1f38", bordercolor: "#00e5ff", font: { color: "#fff" } },
+        legend        : { font: { color: "#fff" }, bgcolor: "transparent", orientation: isMobile ? "h" : "v",
+                          x: 0, y: isMobile ? -0.3 : 1 },
+    };
+
+    const plotConfig = { responsive: true, displayModeBar: false };
+
+    // ── TRENDS CHART ──────────────────────────────────────────
+    const td = resultsData.market_data && resultsData.market_data.trends;
+    if (td && td.dates && td.dates.length > 0) {
+        // On mobile, downsample to every 4th point for clarity
+        let dates  = td.dates;
+        let values = td.values;
+        if (isMobile && dates.length > 24) {
+            dates  = dates.filter((_,i) => i % 4 === 0);
+            values = values.filter((_,i) => i % 4 === 0);
+        }
+
+        const chartH = isMobile ? 220 : 320;
+        document.getElementById("trendsChart").style.height = chartH + "px";
+
+        Plotly.newPlot("trendsChart", [{
+            x        : dates,
+            y        : values,
+            type     : "scatter",
+            mode     : "lines",
+            name     : "Interest",
+            line     : { color: "#00e5ff", width: isMobile ? 2 : 3, shape: "spline" },
+            fill     : "tozeroy",
+            fillcolor: "rgba(0,229,255,0.07)",
+        }], {
+            ...baseLayout,
+            yaxis: { ...baseLayout.yaxis, title: { text: "Interest", standoff: 4 } },
+        }, plotConfig);
+    } else {
+        document.getElementById("trendsChart").innerHTML =
+            "<div class='empty-section'><i class='fas fa-chart-line fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No trend data available</p></div>";
     }
 
-    // Close dropdown when clicking outside
-    document.addEventListener("click", function(e) {
-        const dropdown = document.getElementById("userDropdown");
-        if (dropdown && !dropdown.contains(e.target)) {
-            document.getElementById("dropdownMenu").classList.remove("show");
-        }
+    // ── SALES CHART ───────────────────────────────────────────
+    const sf = resultsData.sales_forecast;
+    if (sf && sf.months && sf.months.length > 0) {
+        // Abbreviate month labels on mobile: "Jan 2026" → "Jan"
+        const labels = isMobile
+            ? sf.months.map(m => m.split(" ")[0])
+            : sf.months;
+
+        const chartH = isMobile ? 220 : 320;
+        document.getElementById("salesChart").style.height = chartH + "px";
+
+        Plotly.newPlot("salesChart", [
+            {
+                x    : labels,
+                y    : sf.revenue,
+                type : "bar",
+                name : "Revenue",
+                marker: {
+                    color: sf.revenue.map(v => `rgba(0,229,255,${0.45 + 0.55*(v/Math.max(...sf.revenue))})`),
+                    line : { color: "#00e5ff", width: 1 }
+                },
+                hovertemplate: isMobile ? "$%{y:,.0f}<extra></extra>" : "%{x}<br>$%{y:,.0f}<extra></extra>",
+            },
+            {
+                x    : labels,
+                y    : sf.trend,
+                type : "scatter",
+                mode : "lines",
+                name : "Trend",
+                line : { color: "#00ff64", width: isMobile ? 1.5 : 2, dash: "dot" },
+                hovertemplate: "$%{y:,.0f}<extra></extra>",
+            }
+        ], {
+            ...baseLayout,
+            yaxis: { ...baseLayout.yaxis, tickprefix: "$", tickformat: ",.0f" },
+            bargap: isMobile ? 0.25 : 0.35,
+        }, plotConfig);
+    } else {
+        document.getElementById("salesChart").innerHTML =
+            "<div class='empty-section'><i class='fas fa-dollar-sign fa-2x mb-3' style='color:rgba(0,229,255,0.3)'></i><p>No forecast data available</p></div>";
+    }
+
+    // Re-render charts on resize (orientation change on mobile)
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            Plotly.Plots.resize("trendsChart");
+            Plotly.Plots.resize("salesChart");
+        }, 200);
     });
 
+    // ── NICHE BARS ────────────────────────────────────────────
+    setTimeout(() => {
+        document.querySelectorAll(".niche-bar-fill").forEach(bar => {
+            const w = bar.style.width;
+            bar.style.width = "0%";
+            setTimeout(() => bar.style.width = w, 100);
+        });
+    }, 300);
 
-    // ── 2. MOBILE MENU ───────────────────────────────────────
-    function toggleMobileMenu() {
-        const menu = document.getElementById("mobileMenu");
-        const icon = document.getElementById("hamburgerIcon");
-        menu.classList.toggle("open");
-
-        if (menu.classList.contains("open")) {
-            icon.className = "fas fa-times";
-        } else {
-            icon.className = "fas fa-bars";
-        }
+    // ── PDF ───────────────────────────────────────────────────
+    function downloadPDF() {
+        ["pdfBtn","pdfBtn2"].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) b.innerHTML = "⏳ Generating...";
+        });
+        const p = new URLSearchParams();
+        p.append("idea", resultsData.idea);
+        p.append("results", JSON.stringify(resultsData));
+        fetch("/report", { method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body: p })
+            .then(r => r.json())
+            .then(data => {
+                if (data.pdf_path) {
+                    window.open("/download/" + data.pdf_path, "_blank");
+                    ["pdfBtn","pdfBtn2"].forEach(id => { const b = document.getElementById(id); if(b) b.innerHTML = "✅ Downloaded!"; });
+                } else {
+                    alert("PDF failed: " + (data.error||"Unknown error"));
+                    resetPdfBtns();
+                }
+            }).catch(e => { alert("Error: "+e); resetPdfBtns(); });
+    }
+    function resetPdfBtns() {
+        ["pdfBtn","pdfBtn2"].forEach(id => {
+            const b = document.getElementById(id); if(b) b.innerHTML = "<i class='fas fa-file-pdf'></i> PDF Report";
+        });
     }
 
-
-    // ── 3. AUTO DISMISS FLASH TOASTS ─────────────────────────
-    setTimeout(() => {
-        const toasts = document.querySelectorAll(".flash-toast");
-        toasts.forEach(t => {
-            t.style.opacity   = "0";
-            t.style.transform = "translateX(20px)";
-            t.style.transition= "all 0.5s ease";
-            setTimeout(() => t.remove(), 500);
-        });
-    }, 4000);
+    // ── EMAIL ─────────────────────────────────────────────────
+    function emailReport() {
+        const email = document.getElementById("emailInput").value;
+        const btn   = document.getElementById("emailBtn");
+        if (!email) { alert("Please enter an email address"); return; }
+        btn.innerHTML = "⏳ Sending...";
+        const p = new URLSearchParams();
+        p.append("email", email); p.append("idea", resultsData.idea);
+        p.append("results", JSON.stringify(resultsData));
+        fetch("/email", { method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body: p })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) { btn.innerHTML = "✅ Sent!"; }
+                else { alert("Failed: "+(data.error||"Unknown error")); btn.innerHTML = "<i class='fas fa-envelope'></i> Email Report"; }
+            }).catch(e => { alert("Error: "+e); btn.innerHTML = "<i class='fas fa-envelope'></i> Email Report"; });
+    }
 </script>
-
-{% block extra_scripts %}{% endblock %}
-
-</body>
-</html>
+{% endblock %}
