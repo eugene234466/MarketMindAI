@@ -190,7 +190,8 @@
     }
 
     const STEPS = ['step-ai','step-market','step-competitors','step-ecommerce','step-forecast','step-niches','step-save'];
-    let stepIdx = 0, stepTimer, pollTimer;
+    let stepIdx = 0, stepTimer, pollTimer, pollCount = 0;
+    const MAX_POLLS = 120; // 6 minutes max (120 × 3s)
 
     function setActive(id) { document.getElementById(id).classList.add('active'); }
     function setDone(id)   { const e = document.getElementById(id); e.classList.remove('active'); e.classList.add('done'); }
@@ -225,6 +226,12 @@
     }
 
     async function poll(job_id) {
+        pollCount++;
+        if (pollCount > MAX_POLLS) {
+            clearInterval(pollTimer);
+            showError('Analysis is taking too long — please try again');
+            return;
+        }
         try {
             const res  = await fetch('/analyze/status/' + job_id);
             const data = await res.json();
