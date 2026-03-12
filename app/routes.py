@@ -251,8 +251,7 @@ def download_pdf(filename):
     import re
     if not re.match(r'^MarketMind_[\w\-]+\.pdf$', filename):
         abort(404)
-    reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "reports")
-    reports_dir = os.path.normpath(reports_dir)
+    reports_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "reports"))
     filepath = os.path.join(reports_dir, filename)
     if not os.path.exists(filepath):
         abort(404)
