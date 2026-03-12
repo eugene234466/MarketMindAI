@@ -25,13 +25,9 @@ numpy>=1.26.0
 # ── Reports ────────────────────────────────────────────────────
 fpdf2>=2.7.9
 
-# ── Payments (optional — add STRIPE_* env vars to activate) ───
-stripe>=8.0.0
-
 # ── Rate limiting ──────────────────────────────────────────────
-# Memory by default. Add REDIS_URL env var for multi-worker support.
 flask-limiter>=3.5.0
 
 # ── Performance ────────────────────────────────────────────────
-flask-compress>=1.14       # gzip HTML/JSON responses automatically
-redis>=5.0.0               # Redis client (optional — only used if REDIS_URL set)
+flask-compress>=1.14
+redis>=5.0.0
