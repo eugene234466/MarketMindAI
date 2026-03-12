@@ -58,7 +58,7 @@ def get_conn():
 
 # ── INIT TABLES ──────────────────────────────────────────────────────────────
 
-def init_db():
+def init_db(app):
     """Create tables if they don't exist. Call once at app startup."""
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -156,9 +156,13 @@ def save_research(results: dict, user_id: int) -> int | None:
                     (user_id, idea, json.dumps(results))
                 )
                 row = cur.fetchone()
-                return row[0] if row else None
+                research_id = row[0] if row else None
+                print(f"[DB] Research saved with ID: {research_id}")
+                return research_id
     except Exception as e:
         print(f"[DB] save_research error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -176,7 +180,16 @@ def get_history(user_id: int) -> list[dict]:
                     LIMIT  50;
                 """, (user_id,))
                 rows = cur.fetchall()
-                return [dict(r) for r in rows]
+                history = []
+                for r in rows:
+                    history.append({
+                        "id": r["id"],
+                        "idea": r["idea"],
+                        "created_at": r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if r["created_at"] else None,
+                        "verdict": r["verdict"]
+                    })
+                print(f"[DB] Retrieved {len(history)} history items for user {user_id}")
+                return history
     except Exception as e:
         print(f"[DB] get_history error: {e}")
         return []
@@ -188,19 +201,30 @@ def get_research_by_id(research_id: int) -> dict | None:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT results FROM research WHERE id = %s;",
+                    "SELECT * FROM research WHERE id = %s;",
                     (research_id,)
                 )
                 row = cur.fetchone()
                 if row:
+                    # Convert row to dict
+                    result = dict(row)
                     # results is already a dict when using JSONB + RealDictCursor
-                    data = row["results"]
-                    if isinstance(data, str):
-                        data = json.loads(data)
-                    return data
+                    if 'results' in result and isinstance(result['results'], str):
+                        result['results'] = json.loads(result['results'])
+                    elif 'results' in result:
+                        result['results'] = result['results']
+                    
+                    # Add created_at as string
+                    if result.get('created_at'):
+                        result['created_at'] = result['created_at'].strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    print(f"[DB] Retrieved research ID {research_id}")
+                    return result['results']  # Return just the results dict to match old API
                 return None
     except Exception as e:
         print(f"[DB] get_research_by_id error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -210,7 +234,10 @@ def delete_research(research_id: int) -> bool:
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM research WHERE id = %s;", (research_id,))
-                return cur.rowcount > 0
+                deleted = cur.rowcount > 0
+                if deleted:
+                    print(f"[DB] Deleted research ID: {research_id}")
+                return deleted
     except Exception as e:
         print(f"[DB] delete_research error: {e}")
         return False
