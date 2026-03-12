@@ -156,6 +156,7 @@ def analyze_run():
         create_job(job_id)
 
         def run(idea, user_id, job_id):
+            error_msg = None
             try:
                 from core.analyze import run_pipeline
                 results     = run_pipeline(idea)
@@ -163,10 +164,20 @@ def analyze_run():
                 research_id = save_research(results, user_id)
                 increment_usage(user_id)
                 complete_job(job_id, research_id)
+                return
             except Exception as e:
-                print(f"[job {job_id}] Pipeline error: {e}")
                 import traceback; traceback.print_exc()
-                fail_job(job_id, str(e))
+                error_msg = str(e) or "Unknown pipeline error"
+
+            # Guaranteed fail path — retry fail_job up to 3 times
+            for attempt in range(3):
+                try:
+                    fail_job(job_id, error_msg)
+                    return
+                except Exception as fe:
+                    print(f"[job {job_id}] fail_job attempt {attempt+1} error: {fe}")
+                    import time; time.sleep(1)
+            print(f"[job {job_id}] Could not write failure to DB after 3 attempts")
 
         threading.Thread(target=run, args=(idea, user_id, job_id), daemon=True).start()
         return jsonify({"job_id": job_id})
@@ -181,14 +192,29 @@ def analyze_run():
 @login_required
 def analyze_status(job_id):
     job = get_job(job_id)
-    if not job:
-        return jsonify({"status": "error", "error": "Job not found"}), 404
+
+    # DB hiccup — return pending so the frontend keeps polling
+    if job is None:
+        return jsonify({"status": "pending"})
+
     if job["status"] == "done":
         delete_job(job_id)
         return jsonify({"status": "done", "research_id": job["research_id"]})
-    elif job["status"] == "error":
+
+    if job["status"] == "error":
+        err = job.get("error") or "Analysis failed — please try again"
         delete_job(job_id)
-        return jsonify({"status": "error", "error": job["error"]}), 500
+        return jsonify({"status": "error", "error": err})
+
+    # Check for stale jobs (pending > 5 min = thread died silently)
+    created_at = job.get("created_at")
+    if created_at:
+        from datetime import datetime, timezone, timedelta
+        age = datetime.now(timezone.utc) - created_at.replace(tzinfo=timezone.utc) if created_at.tzinfo is None else datetime.now(timezone.utc) - created_at
+        if age > timedelta(minutes=5):
+            delete_job(job_id)
+            return jsonify({"status": "error", "error": "Analysis timed out — please try again"})
+
     return jsonify({"status": "pending"})
 
 
