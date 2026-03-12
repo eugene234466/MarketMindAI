@@ -264,9 +264,14 @@
                 headers: {'Content-Type': 'application/json'},
                 body   : JSON.stringify({ idea: {{ idea|tojson }} })
             });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const data = await res.json();
-            if (!data.job_id) throw new Error('No job ID returned');
+            let data = {};
+            try { data = await res.json(); } catch (_) {}
+            if (!res.ok) {
+                throw new Error(data.error || ('Server error: HTTP ' + res.status));
+            }
+            if (!data.job_id) {
+                throw new Error(data.error || 'No job ID returned — please try again');
+            }
             job_id = data.job_id;
         } catch (e) {
             showError(e.message);
