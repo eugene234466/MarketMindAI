@@ -373,12 +373,13 @@ def generate_pdf(idea, results):
         )
 
         # ── SAVE FILE ─────────────────────────────────────────
-        os.makedirs("reports", exist_ok=True)
+        reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "reports")
+        os.makedirs(reports_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_idea = "".join(
             c for c in idea[:30] if c.isalnum() or c in " _-"
         ).strip().replace(" ", "_")
-        filename  = f"reports/MarketMind_{safe_idea}_{timestamp}.pdf"
+        filename  = os.path.join(reports_dir, f"MarketMind_{safe_idea}_{timestamp}.pdf")
         pdf.output(filename)
 
         print(f"PDF saved: {filename}")
