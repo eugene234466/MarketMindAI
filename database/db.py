@@ -1,5 +1,5 @@
 # ============================================================
-# DATABASE/DB.PY — PostgreSQL with Connection Pooling (Free Version)
+# DATABASE/DB.PY — PostgreSQL with Connection Pooling
 # ============================================================
 
 import os
@@ -9,7 +9,6 @@ import psycopg2
 import psycopg2.extras
 from psycopg2.pool import ThreadedConnectionPool
 from contextlib import contextmanager
-from datetime import date
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 if DATABASE_URL.startswith("postgres://"):
@@ -54,9 +53,9 @@ def init_db():
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id         SERIAL PRIMARY KEY,
-                    name       TEXT NOT NULL,
+                    name       TEXT        NOT NULL,
                     email      TEXT UNIQUE NOT NULL,
-                    password   TEXT NOT NULL,
+                    password   TEXT        NOT NULL,
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
             """)
@@ -64,12 +63,15 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS research (
                     id         SERIAL PRIMARY KEY,
                     user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                    idea       TEXT NOT NULL,
-                    results    JSONB NOT NULL,
+                    idea       TEXT        NOT NULL,
+                    results    JSONB       NOT NULL,
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
             """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_research_user_id ON research(user_id);")
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_research_user_id ON research(user_id);
+            """)
+            # Jobs table — avoids in-memory _jobs dict, works with multiple workers
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
                     id          TEXT PRIMARY KEY,
@@ -79,15 +81,7 @@ def init_db():
                     created_at  TIMESTAMPTZ DEFAULT NOW()
                 );
             """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS usage_log (
-                    user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                    log_date   DATE NOT NULL,
-                    count      INTEGER DEFAULT 0,
-                    PRIMARY KEY (user_id, log_date)
-                );
-            """)
-            # Clean old jobs
+            # Clean up old jobs (older than 1 hour) on init
             cur.execute("DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '1 hour';")
     print("[DB] Tables ready.")
 
@@ -157,6 +151,7 @@ def create_user(name: str, email: str, password: str) -> int | None:
         print(f"[DB] create_user error: {e}")
         return None
 
+
 def get_user_by_email(email: str) -> dict | None:
     try:
         with get_conn() as conn:
@@ -167,6 +162,7 @@ def get_user_by_email(email: str) -> dict | None:
         print(f"[DB] get_user_by_email error: {e}")
         return None
 
+
 def get_user_by_id(user_id: int) -> dict | None:
     try:
         with get_conn() as conn:
@@ -176,6 +172,7 @@ def get_user_by_id(user_id: int) -> dict | None:
     except Exception as e:
         print(f"[DB] get_user_by_id error: {e}")
         return None
+
 
 def verify_password(plain: str, hashed: str) -> bool:
     try:
@@ -201,6 +198,7 @@ def save_research(results: dict, user_id: int) -> int | None:
         print(f"[DB] save_research error: {e}")
         return None
 
+
 def get_history(user_id: int) -> list[dict]:
     try:
         with get_conn() as conn:
@@ -208,15 +206,16 @@ def get_history(user_id: int) -> list[dict]:
                 cur.execute("""
                     SELECT id, idea, created_at,
                            results->'ai_insights'->>'verdict' AS verdict
-                    FROM research
-                    WHERE user_id=%s
-                    ORDER BY created_at DESC
-                    LIMIT 50;
+                    FROM   research
+                    WHERE  user_id = %s
+                    ORDER  BY created_at DESC
+                    LIMIT  50;
                 """, (user_id,))
                 return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         print(f"[DB] get_history error: {e}")
         return []
+
 
 def get_research_by_id(research_id: int) -> dict | None:
     try:
@@ -232,6 +231,7 @@ def get_research_by_id(research_id: int) -> dict | None:
         print(f"[DB] get_research_by_id error: {e}")
         return None
 
+
 def delete_research(research_id: int) -> bool:
     try:
         with get_conn() as conn:
@@ -241,35 +241,3 @@ def delete_research(research_id: int) -> bool:
     except Exception as e:
         print(f"[DB] delete_research error: {e}")
         return False
-
-
-# ── USAGE TRACKING (Free Tier, Optional) ─────────────────────
-
-def get_user_usage(user_id: int) -> int:
-    try:
-        today = date.today()
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT count FROM usage_log WHERE user_id=%s AND log_date=%s;",
-                    (user_id, today)
-                )
-                row = cur.fetchone()
-                return row[0] if row else 0
-    except Exception as e:
-        print(f"[DB] get_user_usage error: {e}")
-        return 0
-
-def increment_usage(user_id: int):
-    try:
-        today = date.today()
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO usage_log (user_id, log_date, count)
-                    VALUES (%s, %s, 1)
-                    ON CONFLICT (user_id, log_date)
-                    DO UPDATE SET count = usage_log.count + 1;
-                """, (user_id, today))
-    except Exception as e:
-        print(f"[DB] increment_usage error: {e}")
