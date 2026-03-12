@@ -130,15 +130,25 @@ def fail_job(job_id: str, error: str):
             cur.execute("UPDATE jobs SET status='error', error=%s WHERE id=%s;", (error[:500], job_id))
 
 def get_job(job_id: str) -> dict | None:
-    try:
-        with get_conn() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("SELECT * FROM jobs WHERE id=%s;", (job_id,))
-                row = cur.fetchone()
-                return dict(row) if row else None
-    except Exception as e:
-        print(f"[DB] get_job error: {e}")
-        return None
+    for attempt in range(2):
+        try:
+            with get_conn() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    cur.execute("SELECT * FROM jobs WHERE id=%s;", (job_id,))
+                    row = cur.fetchone()
+                    return dict(row) if row else None
+        except Exception as e:
+            print(f"[DB] get_job error (attempt {attempt+1}): {e}")
+            if attempt == 0:
+                # Reset pool and retry once
+                global _pool
+                try:
+                    if _pool:
+                        _pool.closeall()
+                except Exception:
+                    pass
+                _pool = None
+    return None
 
 def delete_job(job_id: str):
     try:
