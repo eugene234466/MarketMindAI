@@ -51,36 +51,16 @@ def init_db():
     with get_conn() as conn:
         with conn.cursor() as cur:
 
-            # Users — with plan + Stripe fields
+            # Users
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id                  SERIAL PRIMARY KEY,
-                    name                TEXT        NOT NULL,
-                    email               TEXT UNIQUE NOT NULL,
-                    password            TEXT        NOT NULL,
-                    plan                TEXT        NOT NULL DEFAULT 'free',
-                    stripe_customer_id  TEXT,
-                    stripe_sub_id       TEXT,
-                    plan_expires_at     TIMESTAMPTZ,
-                    analyses_this_month INTEGER     NOT NULL DEFAULT 0,
-                    billing_cycle_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    id         SERIAL PRIMARY KEY,
+                    name       TEXT        NOT NULL,
+                    email      TEXT UNIQUE NOT NULL,
+                    password   TEXT        NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
             """)
-
-            # Add new columns to existing users table if upgrading
-            for col, defn in [
-                ("plan",                "TEXT NOT NULL DEFAULT 'free'"),
-                ("stripe_customer_id",  "TEXT"),
-                ("stripe_sub_id",       "TEXT"),
-                ("plan_expires_at",     "TIMESTAMPTZ"),
-                ("analyses_this_month", "INTEGER NOT NULL DEFAULT 0"),
-                ("billing_cycle_start", "TIMESTAMPTZ NOT NULL DEFAULT NOW()"),
-            ]:
-                try:
-                    cur.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {defn};")
-                except Exception:
-                    pass
 
             # Research
             cur.execute("""
@@ -140,11 +120,9 @@ def get_job(job_id: str) -> dict | None:
         except Exception as e:
             print(f"[DB] get_job error (attempt {attempt+1}): {e}")
             if attempt == 0:
-                # Reset pool and retry once
                 global _pool
                 try:
-                    if _pool:
-                        _pool.closeall()
+                    if _pool: _pool.closeall()
                 except Exception:
                     pass
                 _pool = None
@@ -204,86 +182,9 @@ def verify_password(plain: str, hashed: str) -> bool:
     except Exception:
         return False
 
-def get_user_by_stripe_customer(customer_id: str) -> dict | None:
-    try:
-        with get_conn() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("SELECT * FROM users WHERE stripe_customer_id=%s;", (customer_id,))
-                return cur.fetchone()
-    except Exception as e:
-        print(f"[DB] get_user_by_stripe_customer error: {e}")
-        return None
-
-
-# ── PLAN & USAGE FUNCTIONS ─────────────────────────────────────
-
-def get_user_usage(user_id: int) -> dict:
-    """Returns current month usage + plan info for a user."""
-    try:
-        with get_conn() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT plan, analyses_this_month, billing_cycle_start
-                    FROM users WHERE id=%s;
-                """, (user_id,))
-                row = cur.fetchone()
-                if not row:
-                    return {"plan": "free", "analyses_this_month": 0}
-
-                # Auto-reset counter if billing cycle has rolled over
-                now   = datetime.now(timezone.utc)
-                cycle = row["billing_cycle_start"]
-                if cycle and (now.year > cycle.year or now.month > cycle.month):
-                    cur.execute("""
-                        UPDATE users
-                        SET analyses_this_month=0, billing_cycle_start=%s
-                        WHERE id=%s;
-                    """, (now, user_id))
-                    conn.commit()
-                    return {"plan": row["plan"], "analyses_this_month": 0}
-
-                return {"plan": row["plan"], "analyses_this_month": row["analyses_this_month"]}
-    except Exception as e:
-        print(f"[DB] get_user_usage error: {e}")
-        return {"plan": "free", "analyses_this_month": 0}
-
 def increment_usage(user_id: int):
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE users SET analyses_this_month = analyses_this_month + 1 WHERE id=%s;",
-                    (user_id,)
-                )
-    except Exception as e:
-        print(f"[DB] increment_usage error: {e}")
-
-def update_user_plan(user_id: int, plan: str, stripe_customer_id: str = None,
-                     stripe_sub_id: str = None, expires_at=None):
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE users SET
-                        plan=%s,
-                        stripe_customer_id=COALESCE(%s, stripe_customer_id),
-                        stripe_sub_id=COALESCE(%s, stripe_sub_id),
-                        plan_expires_at=%s
-                    WHERE id=%s;
-                """, (plan, stripe_customer_id, stripe_sub_id, expires_at, user_id))
-    except Exception as e:
-        print(f"[DB] update_user_plan error: {e}")
-
-def cancel_user_plan(user_id: int):
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE users SET plan='free', stripe_sub_id=NULL, plan_expires_at=NULL
-                    WHERE id=%s;
-                """, (user_id,))
-    except Exception as e:
-        print(f"[DB] cancel_user_plan error: {e}")
+    # Kept as a no-op for now — can wire up analytics later
+    pass
 
 
 # ── RESEARCH FUNCTIONS ─────────────────────────────────────────
@@ -343,16 +244,3 @@ def delete_research(research_id: int) -> bool:
     except Exception as e:
         print(f"[DB] delete_research error: {e}")
         return False
-
-def get_research_count_this_month(user_id: int) -> int:
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT COUNT(*) FROM research
-                    WHERE user_id=%s
-                    AND created_at >= DATE_TRUNC('month', NOW());
-                """, (user_id,))
-                return cur.fetchone()[0]
-    except Exception:
-        return 0
