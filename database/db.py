@@ -58,8 +58,9 @@ def get_conn():
 
 # ── INIT TABLES ──────────────────────────────────────────────────────────────
 
-def init_db(app):
-    """Create tables if they don't exist. Call once at app startup."""
+def init_db(app=None):
+    """Create tables if they don't exist. Call once at app startup.
+    The app parameter is accepted for compatibility but not used."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -101,12 +102,16 @@ def create_user(name: str, email: str, password: str) -> int | None:
                     (name, email, hashed)
                 )
                 row = cur.fetchone()
-                return row[0] if row else None
+                user_id = row[0] if row else None
+                print(f"[DB] User created: {email} with ID: {user_id}")
+                return user_id
     except psycopg2.errors.UniqueViolation:
         print(f"[DB] Email already exists: {email}")
         return None
     except Exception as e:
         print(f"[DB] create_user error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -116,7 +121,10 @@ def get_user_by_email(email: str) -> dict | None:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute("SELECT * FROM users WHERE email = %s;", (email,))
-                return cur.fetchone()
+                row = cur.fetchone()
+                if row:
+                    return dict(row)
+                return None
     except Exception as e:
         print(f"[DB] get_user_by_email error: {e}")
         return None
@@ -128,7 +136,10 @@ def get_user_by_id(user_id: int) -> dict | None:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute("SELECT * FROM users WHERE id = %s;", (user_id,))
-                return cur.fetchone()
+                row = cur.fetchone()
+                if row:
+                    return dict(row)
+                return None
     except Exception as e:
         print(f"[DB] get_user_by_id error: {e}")
         return None
@@ -145,9 +156,13 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ── RESEARCH FUNCTIONS ────────────────────────────────────────────────────────
 
-def save_research(results: dict, user_id: int) -> int | None:
+def save_research(results: dict, user_id: int = None) -> int | None:
     """Save a full analysis to the database. Returns the new row id."""
     try:
+        if not results:
+            print("[DB] No results to save")
+            return None
+            
         idea = results.get("idea", "Unknown")
         with get_conn() as conn:
             with conn.cursor() as cur:
@@ -157,7 +172,7 @@ def save_research(results: dict, user_id: int) -> int | None:
                 )
                 row = cur.fetchone()
                 research_id = row[0] if row else None
-                print(f"[DB] Research saved with ID: {research_id}")
+                print(f"[DB] Research saved with ID: {research_id} for idea: {idea}")
                 return research_id
     except Exception as e:
         print(f"[DB] save_research error: {e}")
@@ -186,12 +201,14 @@ def get_history(user_id: int) -> list[dict]:
                         "id": r["id"],
                         "idea": r["idea"],
                         "created_at": r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if r["created_at"] else None,
-                        "verdict": r["verdict"]
+                        "verdict": r.get("verdict", "N/A")
                     })
                 print(f"[DB] Retrieved {len(history)} history items for user {user_id}")
                 return history
     except Exception as e:
         print(f"[DB] get_history error: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -208,18 +225,24 @@ def get_research_by_id(research_id: int) -> dict | None:
                 if row:
                     # Convert row to dict
                     result = dict(row)
-                    # results is already a dict when using JSONB + RealDictCursor
-                    if 'results' in result and isinstance(result['results'], str):
-                        result['results'] = json.loads(result['results'])
-                    elif 'results' in result:
-                        result['results'] = result['results']
                     
-                    # Add created_at as string
+                    # Parse results JSON if needed
+                    if 'results' in result:
+                        if isinstance(result['results'], str):
+                            results_data = json.loads(result['results'])
+                        else:
+                            results_data = result['results']
+                    else:
+                        results_data = {}
+                    
+                    # Add metadata
+                    results_data['id'] = result['id']
+                    results_data['user_id'] = result['user_id']
                     if result.get('created_at'):
-                        result['created_at'] = result['created_at'].strftime("%Y-%m-%d %H:%M:%S")
+                        results_data['created_at'] = result['created_at'].strftime("%Y-%m-%d %H:%M:%S")
                     
                     print(f"[DB] Retrieved research ID {research_id}")
-                    return result['results']  # Return just the results dict to match old API
+                    return results_data
                 return None
     except Exception as e:
         print(f"[DB] get_research_by_id error: {e}")
