@@ -124,6 +124,17 @@ def init_db():
             """)
             cur.execute("DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '1 hour';")
 
+            # Password reset tokens
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    token      TEXT PRIMARY KEY,
+                    user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    expires_at TIMESTAMPTZ NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            cur.execute("DELETE FROM password_reset_tokens WHERE expires_at < NOW();")
+
     print("[DB] Tables ready.")
 
 
@@ -273,4 +284,56 @@ def delete_research(research_id: int) -> bool:
                 return cur.rowcount > 0
     except Exception as e:
         print(f"[DB] delete_research error: {e}")
+        return False
+
+
+# ── PASSWORD RESET FUNCTIONS ───────────────────────────────────
+
+def create_reset_token(user_id: int, token: str):
+    """Store a reset token valid for 1 hour."""
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                # Clear any existing tokens for this user first
+                cur.execute("DELETE FROM password_reset_tokens WHERE user_id=%s;", (user_id,))
+                cur.execute(
+                    "INSERT INTO password_reset_tokens (token, user_id, expires_at) "
+                    "VALUES (%s, %s, NOW() + INTERVAL '1 hour');",
+                    (token, user_id)
+                )
+    except Exception as e:
+        print(f"[DB] create_reset_token error: {e}")
+
+def get_reset_token(token: str) -> dict | None:
+    """Return the token row if it exists and hasn't expired."""
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM password_reset_tokens WHERE token=%s AND expires_at > NOW();",
+                    (token,)
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+    except Exception as e:
+        print(f"[DB] get_reset_token error: {e}")
+        return None
+
+def delete_reset_token(token: str):
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM password_reset_tokens WHERE token=%s;", (token,))
+    except Exception as e:
+        print(f"[DB] delete_reset_token error: {e}")
+
+def update_password(user_id: int, new_password: str):
+    try:
+        hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE users SET password=%s WHERE id=%s;", (hashed, user_id))
+        return True
+    except Exception as e:
+        print(f"[DB] update_password error: {e}")
         return False
