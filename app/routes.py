@@ -342,6 +342,54 @@ def health():
         return {"status": "error", "db": str(e)}, 500
 
 
+# ── FORGOT PASSWORD ──────────────────────────────────────────
+@main.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if "user_id" in session:
+        return redirect(url_for("main.index"))
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        msg = "If that email is registered, you\'ll receive a reset link shortly."
+        user = get_user_by_email(email)
+        if user:
+            import secrets
+            from database.db import create_reset_token
+            from core.email_sender import send_reset_email
+            token     = secrets.token_urlsafe(32)
+            reset_url = request.host_url.rstrip("/") + url_for("main.reset_password", token=token)
+            create_reset_token(user["id"], token)
+            send_reset_email(email, reset_url)
+        flash(msg, "info")
+        return redirect(url_for("main.forgot_password"))
+    return render_template("forgot_password.html")
+
+
+# ── RESET PASSWORD ────────────────────────────────────────────
+@main.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    if "user_id" in session:
+        return redirect(url_for("main.index"))
+    from database.db import get_reset_token, delete_reset_token, update_password
+    row = get_reset_token(token)
+    if not row:
+        flash("This reset link is invalid or has expired. Please request a new one.", "danger")
+        return redirect(url_for("main.forgot_password"))
+    if request.method == "POST":
+        pw  = request.form.get("password", "")
+        pw2 = request.form.get("confirm_password", "")
+        if len(pw) < 6:
+            flash("Password must be at least 6 characters.", "danger")
+            return render_template("reset_password.html", token=token)
+        if pw != pw2:
+            flash("Passwords do not match.", "danger")
+            return render_template("reset_password.html", token=token)
+        update_password(row["user_id"], pw)
+        delete_reset_token(token)
+        flash("Password updated! You can now log in.", "success")
+        return redirect(url_for("main.login"))
+    return render_template("reset_password.html", token=token)
+
+
 # ── 17. TERMS / ABOUT / MISC ──────────────────────────────────
 @main.route("/terms")
 def terms():
