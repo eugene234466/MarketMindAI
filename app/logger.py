@@ -48,7 +48,6 @@ def init_logging(app):
     # Quieten noisy libs
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
-    logging.getLogger("stripe").setLevel(logging.WARNING)
 
     app.logger.setLevel(level)
     app.logger.info(f"Logging initialised (env={env})")
