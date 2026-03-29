@@ -1,39 +1,27 @@
 # ============================================================
-# CORE/MARKET_RESEARCHER.PY — Market Research
-# Uses pytrends (Google Trends) — completely free
-# No SerpAPI calls at all
+# CORE/MARKET_RESEARCHER.PY
 # ============================================================
 
 import time
+import json
 import hashlib
 from pytrends.request import TrendReq
-from core.gemini_client import call_gemini
-import json
+from core.groq_client import call_groq
 
-# ── IN-MEMORY CACHE ──────────────────────────────────────────
 _market_cache = {}
 
 def _cache_key(idea):
     return hashlib.md5(idea.strip().lower().encode()).hexdigest()
 
-
-# ── MAIN FUNCTION ────────────────────────────────────────────
 def get_market_data(idea):
     print(f"Researching market for: {idea}")
-
-    # ── CHECK CACHE ──────────────────────────────────────────
     key = _cache_key(idea)
     if key in _market_cache:
         print("Market cache hit")
         return _market_cache[key]
 
-    # ── GET TREND DATA ───────────────────────────────────────
     trends_data = get_trends(idea)
-
-    # ── GET AI MARKET SUMMARY ────────────────────────────────
     ai_summary  = get_ai_market_summary(idea, trends_data)
-
-    # ── BUILD RESULT ─────────────────────────────────────────
     trend_score = calculate_trend_score(trends_data)
 
     result = {
@@ -46,7 +34,6 @@ def get_market_data(idea):
         "keywords"         : ai_summary.get("keywords",          [idea])
     }
 
-    # ── STORE IN CACHE ────────────────────────────────────────
     if len(_market_cache) >= 50:
         del _market_cache[next(iter(_market_cache))]
     _market_cache[key] = result
@@ -54,84 +41,38 @@ def get_market_data(idea):
     print("Market research complete")
     return result
 
-
-# ── GOOGLE TRENDS (FREE) ─────────────────────────────────────
 def get_trends(idea):
     try:
         pytrends = TrendReq(hl="en-US", tz=360, timeout=(10, 25))
-
-        # ── CLEAN KEYWORD ─────────────────────────────────────
-        keyword = idea[:100]
-        keywords = extract_keywords(keyword)
-
-        pytrends.build_payload(
-            kw_list   = [keywords[0]],
-            cat       = 0,
-            timeframe = "today 12-m",
-            geo       = "",
-            gprop     = ""
-        )
-
+        keywords = extract_keywords(idea[:100])
+        pytrends.build_payload(kw_list=[keywords[0]], cat=0, timeframe="today 12-m", geo="", gprop="")
         df = pytrends.interest_over_time()
-
         if df is not None and not df.empty:
-            col    = df.columns[0]
-            dates  = df.index.strftime("%Y-%m-%d").tolist()
-            values = df[col].tolist()
-
-            return {
-                "dates"  : dates,
-                "values" : values
-            }
-
+            col = df.columns[0]
+            return {"dates": df.index.strftime("%Y-%m-%d").tolist(), "values": df[col].tolist()}
     except Exception as e:
         print(f"Trends error: {e}")
-
     return {"dates": [], "values": []}
 
-
-# ── EXTRACT SHORT KEYWORDS ───────────────────────────────────
 def extract_keywords(idea):
-    # Remove common words, keep core keywords
-    stopwords = [
-        "for", "the", "and", "with", "in", "on",
-        "at", "to", "a", "an", "of", "my", "your"
-    ]
-    words    = idea.lower().split()
+    stopwords = ["for","the","and","with","in","on","at","to","a","an","of","my","your"]
+    words = idea.lower().split()
     keywords = [w for w in words if w not in stopwords and len(w) > 2]
-
-    # Return top 2 keywords max (pytrends limit)
     return keywords[:2] if keywords else [idea.split()[0]]
 
-
-# ── CALCULATE TREND SCORE ────────────────────────────────────
 def calculate_trend_score(trends_data):
     values = trends_data.get("values", [])
-
     if not values:
         return 5
+    recent = values[-12:] if len(values) >= 12 else values
+    avg    = sum(recent) / len(recent)
+    return max(1, min(10, round((avg / 100) * 10, 1)))
 
-    # Use average of last 3 months
-    recent  = values[-12:] if len(values) >= 12 else values
-    avg     = sum(recent) / len(recent)
-
-    # Scale 0-100 → 0-10
-    score   = round((avg / 100) * 10, 1)
-    return max(1, min(10, score))
-
-
-# ── AI MARKET SUMMARY (GEMINI — 1 CALL ONLY) ─────────────────
 def get_ai_market_summary(idea, trends_data):
-    trend_direction = "growing"
     values = trends_data.get("values", [])
-
+    trend_direction = "stable"
     if len(values) >= 6:
-        if values[-1] > values[-6]:
-            trend_direction = "growing"
-        elif values[-1] < values[-6]:
-            trend_direction = "declining"
-        else:
-            trend_direction = "stable"
+        trend_direction = "growing" if values[-1] > values[-6] else "declining" if values[-1] < values[-6] else "stable"
 
     prompt = f"""
     Provide a brief market overview for: "{idea}"
@@ -140,15 +81,17 @@ def get_ai_market_summary(idea, trends_data):
     Respond ONLY with valid JSON, no markdown:
     {{
         "market_size"      : "$XB global market",
-        "competition_level": "Low" or "Medium" or "High",
-        "profit_potential" : "Low" or "Medium" or "High",
+        "competition_level": "Low",
+        "profit_potential" : "Medium",
         "summary"          : "2 sentence market overview",
         "keywords"         : ["keyword1", "keyword2"]
     }}
+
+    competition_level must be one of: Low, Medium, High
+    profit_potential must be one of: Low, Medium, High
     """
 
-    result = call_gemini(prompt)
-
+    result = call_groq(prompt)
     if result:
         try:
             clean = result.strip()
@@ -160,10 +103,5 @@ def get_ai_market_summary(idea, trends_data):
         except Exception as e:
             print(f"Market AI parse error: {e}")
 
-    return {
-        "market_size"      : "N/A",
-        "competition_level": "Medium",
-        "profit_potential" : "Medium",
-        "summary"          : f"Market data for {idea}",
-        "keywords"         : [idea.split()[0]]
-    }
+    return {"market_size": "N/A", "competition_level": "Medium", "profit_potential": "Medium",
+            "summary": f"Market data for {idea}", "keywords": [idea.split()[0]]}
