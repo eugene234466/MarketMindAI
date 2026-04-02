@@ -127,7 +127,6 @@ def analyze():
         flash("Please enter a business idea", "danger")
         return redirect(url_for("main.index"))
 
-    # Cache hit — save and redirect immediately
     cached = get_cached(idea)
     if cached:
         cached["from_cache"] = True
@@ -169,7 +168,6 @@ def analyze_run():
                 import traceback; traceback.print_exc()
                 error_msg = str(e) or "Unknown pipeline error"
 
-            # Guaranteed fail path — retry fail_job up to 3 times
             for attempt in range(3):
                 try:
                     fail_job(job_id, error_msg)
@@ -193,7 +191,6 @@ def analyze_run():
 def analyze_status(job_id):
     job = get_job(job_id)
 
-    # DB hiccup — return pending so the frontend keeps polling
     if job is None:
         return jsonify({"status": "pending"})
 
@@ -207,17 +204,19 @@ def analyze_status(job_id):
         return jsonify({"status": "error", "error": err})
 
     # Check for stale jobs (pending > 5 min = thread died silently)
-   created_at = job.get("created_at")
-   if created_at:
-    from datetime import datetime, timezone, timedelta
-    if isinstance(created_at, str):
-        created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-    if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
-    age = datetime.now(timezone.utc) - created_at
-    if age > timedelta(minutes=5):
-        delete_job(job_id)
-        return jsonify({"status": "error", "error": "Analysis timed out — please try again"})
+    created_at = job.get("created_at")
+    if created_at:
+        from datetime import datetime, timezone, timedelta
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - created_at
+        if age > timedelta(minutes=5):
+            delete_job(job_id)
+            return jsonify({"status": "error", "error": "Analysis timed out — please try again"})
+
+    return jsonify({"status": "pending"})
 
 
 # ── 9. DASHBOARD ──────────────────────────────────────────────
@@ -238,7 +237,6 @@ def report():
         path    = generate_pdf(idea, results)
         if not path:
             return jsonify({"error": "PDF generation failed"}), 500
-        # Store just the filename — the download route resolves the full path
         filename = os.path.basename(path)
         return jsonify({"pdf_path": filename})
     except Exception as e:
@@ -249,7 +247,6 @@ def report():
 @main.route("/download/<filename>")
 @login_required
 def download_pdf(filename):
-    # Sanitise — allow only safe filenames
     import re
     if not re.match(r'^MarketMind_[\w\-]+\.pdf$', filename):
         abort(404)
@@ -337,21 +334,20 @@ def health():
     try:
         from database.db import get_conn
         with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
+            conn.execute("SELECT 1")
         return {"status": "ok", "db": "ok"}, 200
     except Exception as e:
         return {"status": "error", "db": str(e)}, 500
 
 
-# ── FORGOT PASSWORD ──────────────────────────────────────────
+# ── FORGOT PASSWORD ───────────────────────────────────────────
 @main.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
     if "user_id" in session:
         return redirect(url_for("main.index"))
     if request.method == "POST":
         email = request.form.get("email", "").strip()
-        msg = "If that email is registered, you\'ll receive a reset link shortly."
+        msg = "If that email is registered, you'll receive a reset link shortly."
         user = get_user_by_email(email)
         if user:
             import secrets
