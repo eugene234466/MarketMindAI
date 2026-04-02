@@ -207,15 +207,17 @@ def analyze_status(job_id):
         return jsonify({"status": "error", "error": err})
 
     # Check for stale jobs (pending > 5 min = thread died silently)
-    created_at = job.get("created_at")
-    if created_at:
-        from datetime import datetime, timezone, timedelta
-        age = datetime.now(timezone.utc) - created_at.replace(tzinfo=timezone.utc) if created_at.tzinfo is None else datetime.now(timezone.utc) - created_at
-        if age > timedelta(minutes=5):
-            delete_job(job_id)
-            return jsonify({"status": "error", "error": "Analysis timed out — please try again"})
-
-    return jsonify({"status": "pending"})
+   created_at = job.get("created_at")
+   if created_at:
+    from datetime import datetime, timezone, timedelta
+    if isinstance(created_at, str):
+        created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - created_at
+    if age > timedelta(minutes=5):
+        delete_job(job_id)
+        return jsonify({"status": "error", "error": "Analysis timed out — please try again"})
 
 
 # ── 9. DASHBOARD ──────────────────────────────────────────────
