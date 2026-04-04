@@ -1,9 +1,11 @@
 # ============================================================
 # CORE/SALES_PREDICTOR.PY — ML Sales Forecasting
-# Uses scikit-learn only (no Prophet — too heavy for Railway)
+# Uses scikit-learn only (no Prophet — too heavy for Render)
 # Polynomial regression + seasonal overlay for realistic curves
 # ============================================================
 
+import re
+import math
 import numpy as np
 from datetime import datetime, timedelta
 from sklearn.linear_model import LinearRegression
@@ -110,7 +112,6 @@ def growth_curve_forecast(market_data: dict) -> list:
 # ── 5. SEASONALITY OVERLAY ───────────────────────────────────
 
 def _apply_seasonality(values: list) -> list:
-    import math
     result = []
     for i, v in enumerate(values):
         seasonal = 1 + 0.08 * math.sin((i / 12) * 2 * math.pi - math.pi / 2)
@@ -118,46 +119,102 @@ def _apply_seasonality(values: list) -> list:
     return result
 
 
-# ── 6. CONVERT TREND SCORES → REVENUE ───────────────────────
+# ── 6. PARSE MARKET SIZE STRING → USD VALUE ──────────────────
+
+def _parse_market_size(market_size: str) -> float:
+    """
+    Parses any market size string Groq returns and converts to a dollar value.
+    Examples handled:
+        "$380B global luxury market"  → 380_000_000_000
+        "$5B global market"           → 5_000_000_000
+        "$700B+ global software"      → 700_000_000_000
+        "$9T global food industry"    → 9_000_000_000_000
+        "$2.5T"                       → 2_500_000_000_000
+        "Multi-billion dollar..."     → 2_000_000_000
+        "N/A"                         → None
+    """
+    if not market_size or market_size == "N/A":
+        return None
+
+    text = market_size.upper().replace(",", "")
+
+    # Find first number (int or decimal) followed by optional suffix
+    match = re.search(r'\$?([\d.]+)\s*([TBMK]?)', text)
+    if not match:
+        if "BILLION" in text:
+            num = re.search(r'([\d.]+)', text)
+            return float(num.group(1)) * 1e9 if num else None
+        if "TRILLION" in text:
+            num = re.search(r'([\d.]+)', text)
+            return float(num.group(1)) * 1e12 if num else None
+        return None
+
+    value  = float(match.group(1))
+    suffix = match.group(2)
+
+    multipliers = {"T": 1e12, "B": 1e9, "M": 1e6, "K": 1e3}
+    return value * multipliers.get(suffix, 1)
+
+
+# ── 7. CONVERT TREND SCORES → REVENUE ───────────────────────
 
 def convert_to_revenue(forecast: list, market_data: dict) -> list:
+    """
+    Converts 0-100 trend scores to realistic monthly revenue estimates.
+
+    Strategy: A small startup realistically captures 0.0001% - 0.001%
+    of the total addressable market in year 1. We scale that by competition.
+    """
     try:
-        market_size = market_data.get("market_size", "N/A")
-        competition = market_data.get("competition_level", "Medium")
+        market_size_str = market_data.get("market_size", "N/A")
+        competition     = market_data.get("competition_level", "Medium")
+        trend_score     = float(market_data.get("trend_score", 5))
 
-        size_multipliers = {
-            "$10B+"        : 50000,
-            "$1B - $10B"   : 20000,
-            "$100M - $1B"  : 10000,
-            "$10M - $100M" : 5000,
-            "$1M - $10M"   : 1000,
-            "N/A"          : 2000,
-        }
-        competition_factors = {
-            "High"  : 0.05,
-            "Medium": 0.10,
-            "Low"   : 0.20,
-        }
+        market_value = _parse_market_size(market_size_str)
 
-        base       = size_multipliers.get(market_size, 2000)
-        factor     = competition_factors.get(competition, 0.10)
-        multiplier = base * factor
+        if market_value:
+            # Realistic startup capture rate: 0.00001% to 0.0005% of TAM
+            capture_rates = {"Low": 0.000005, "Medium": 0.000002, "High": 0.000001}
+            capture       = capture_rates.get(competition, 0.000002)
+            annual_target = market_value * capture
 
-        return [max(0, round(score * multiplier)) for score in forecast]
+            # Trend score boosts the base (score 1-10 → 0.5x to 1.5x)
+            trend_factor  = 0.5 + (trend_score / 10)
+            annual_target = annual_target * trend_factor
+
+            # Clamp to a believable startup range: $10k - $2M / year
+            annual_target = max(10_000, min(2_000_000, annual_target))
+        else:
+            # Fallback: simple range based on competition + trend
+            base_annual = {
+                "Low":    150_000,
+                "Medium":  80_000,
+                "High":    40_000,
+            }.get(competition, 80_000)
+            trend_factor  = 0.5 + (trend_score / 10)
+            annual_target = base_annual * trend_factor
+
+        # Distribute across 12 months using the forecast shape (0-100 scores)
+        total_score = sum(forecast) or 1
+        revenue = [
+            max(0, round((score / total_score) * annual_target))
+            for score in forecast
+        ]
+        return revenue
 
     except Exception as e:
         print(f"[convert_to_revenue] {e}")
-        return [round(5000 * (1 + 0.08 * i)) for i in range(12)]
+        return [round(5_000 * (1 + 0.08 * i)) for i in range(12)]
 
 
-# ── 7. MONTH LABELS ──────────────────────────────────────────
+# ── 8. MONTH LABELS ──────────────────────────────────────────
 
 def generate_month_labels() -> list:
     now = datetime.now()
     return [(now + timedelta(days=30 * i)).strftime("%b %Y") for i in range(1, 13)]
 
 
-# ── 8. TREND LINE ────────────────────────────────────────────
+# ── 9. TREND LINE ────────────────────────────────────────────
 
 def calculate_trend_line(revenue: list) -> list:
     try:
@@ -165,21 +222,21 @@ def calculate_trend_line(revenue: list) -> list:
         y = np.array(revenue, dtype=float)
         model = LinearRegression()
         model.fit(X, y)
-        return [round(t) for t in model.predict(X).tolist()]
-    except:
+        return [max(0, round(t)) for t in model.predict(X).tolist()]
+    except Exception:
         return revenue
 
 
-# ── 9. PEAK MONTH ────────────────────────────────────────────
+# ── 10. PEAK MONTH ───────────────────────────────────────────
 
 def get_peak_month(revenue: list, months: list) -> str:
     try:
         return months[revenue.index(max(revenue))]
-    except:
+    except Exception:
         return "N/A"
 
 
-# ── 10. GROWTH RATE ──────────────────────────────────────────
+# ── 11. GROWTH RATE ──────────────────────────────────────────
 
 def calculate_growth_rate(revenue: list) -> str:
     try:
@@ -187,11 +244,11 @@ def calculate_growth_rate(revenue: list) -> str:
             return "N/A"
         growth = ((revenue[-1] - revenue[0]) / revenue[0]) * 100
         return f"+{round(growth)}%" if growth >= 0 else f"{round(growth)}%"
-    except:
+    except Exception:
         return "N/A"
 
 
-# ── 11. SUMMARY ──────────────────────────────────────────────
+# ── 12. SUMMARY ──────────────────────────────────────────────
 
 def generate_forecast_summary(revenue: list) -> str:
     try:
@@ -204,19 +261,19 @@ def generate_forecast_summary(revenue: list) -> str:
             f"with {growth} growth. "
             f"Peak performance expected in {peak}."
         )
-    except:
+    except Exception:
         return "Sales forecast data unavailable."
 
 
-# ── 12. FALLBACK ─────────────────────────────────────────────
+# ── 13. FALLBACK ─────────────────────────────────────────────
 
 def get_fallback_forecast() -> dict:
     months  = generate_month_labels()
-    revenue = [round(5000 * (1 + 0.08 * i)) for i in range(12)]
+    revenue = [round(5_000 * (1 + 0.08 * i)) for i in range(12)]
     return {
         "months"     : months,
         "revenue"    : revenue,
-        "trend"      : revenue,
+        "trend"      : calculate_trend_line(revenue),
         "total_year" : sum(revenue),
         "peak_month" : months[-1],
         "growth_rate": "+88%",
