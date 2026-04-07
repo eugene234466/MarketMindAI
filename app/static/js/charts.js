@@ -50,8 +50,26 @@ function renderSalesChart(elementId, salesData) {
     const revenueData = salesData.revenue.map(Number);
     const trendData   = salesData.trend.map(Number);
     
-    // Ensure months are treated as strings, not dates
-    const monthLabels = salesData.months.map(month => String(month));
+    // CRITICAL FIX: Extract only the month name (first 3 characters) from any date format
+    const monthLabels = salesData.months.map(month => {
+        // If it's a string that contains a date
+        if (typeof month === 'string') {
+            // Try to extract just the month abbreviation (Jan, Feb, etc.)
+            const monthMatch = month.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+            if (monthMatch) {
+                return monthMatch[0]; // Return just the month abbreviation
+            }
+            // If no month abbreviation found, return as-is but ensure it's a string
+            return String(month);
+        }
+        // If it's a Date object
+        if (month instanceof Date) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return months[month.getMonth()];
+        }
+        // Fallback: convert to string and take first 3 characters
+        return String(month).substring(0, 3);
+    });
 
     const revenueTrace = {
         x: monthLabels,
@@ -90,27 +108,30 @@ function renderSalesChart(elementId, salesData) {
     const layout = {
         ...chartTheme,
         title: {
-            text: "12-Month Revenue Forecast",
+            text: "12-Month Sales Forecast",
             font: { color: colors.cyan, size: 16 }
         },
         xaxis: {
-            ...chartTheme.xaxis,
             title: { text: "Month", font: { color: colors.muted } },
-            type: "category",  // Forces categorical axis, NOT date/time
+            type: "category",
             tickangle: -45,
-            tickfont: { size: 10, color: colors.white },
+            tickfont: { size: 11, color: colors.white },
             tickmode: "array",
             tickvals: monthLabels,
-            ticktext: monthLabels
+            ticktext: monthLabels,
+            gridcolor: "rgba(255, 255, 255, 0.1)",
+            linecolor: "rgba(255, 255, 255, 0.1)",
+            zerolinecolor: "rgba(255, 255, 255, 0.1)"
         },
         yaxis: {
-            ...chartTheme.yaxis,
             title: { text: "Revenue (USD)", font: { color: colors.muted } },
             tickprefix: "$",
             tickformat: ",.0f",
             rangemode: "tozero",
             range: [0, Math.max(...revenueData, ...trendData) * 1.15],
-            gridcolor: "rgba(255, 255, 255, 0.15)"
+            gridcolor: "rgba(255, 255, 255, 0.15)",
+            linecolor: "rgba(255, 255, 255, 0.1)",
+            zerolinecolor: "rgba(255, 255, 255, 0.1)"
         },
         bargap: 0.2,
         bargroupgap: 0.1,
