@@ -50,25 +50,18 @@ function renderSalesChart(elementId, salesData) {
     const revenueData = salesData.revenue.map(Number);
     const trendData   = salesData.trend.map(Number);
     
-    // FORCEFUL FIX: Create clean month labels as simple strings (1,2,3... or Jan,Feb,Mar...)
-    // Method 1: Use sequential numbers (most reliable)
-    const monthLabels = salesData.months.map((_, index) => {
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        // Use index to get proper month if we have 12 months
-        if (salesData.months.length === 12) {
-            return months[index % 12];
-        }
-        // Otherwise extract just the month name without year
-        let monthStr = String(_);
-        monthStr = monthStr.replace(/\d{4}/g, '').replace(/\s+/g, '').replace(/,/g, '');
-        return monthStr.substring(0, 3);
-    });
-
-    // Create numeric x values (0,1,2,3...) to prevent any date parsing
+    // Get current year
+    const currentYear = new Date().getFullYear();
+    
+    // Create month labels starting from January of current year
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthLabels = months.slice(0, salesData.months.length);
+    
+    // Use numeric x values to prevent date parsing
     const xValues = monthLabels.map((_, i) => i);
 
     const revenueTrace = {
-        x: xValues,  // Use numeric values instead of strings
+        x: xValues,
         y: revenueData,
         type: "bar",
         name: "Revenue",
@@ -81,12 +74,12 @@ function renderSalesChart(elementId, salesData) {
         text: revenueData.map(value => `$${value.toLocaleString()}`),
         textposition: "auto",
         textfont: { color: colors.white, size: 10 },
-        hovertemplate: 'Month: %{text}<br>Revenue: $%{y:,.0f}<extra></extra>',
-        text: monthLabels  // Store month names for hover
+        hovertemplate: `Month: %{text} ${currentYear}<br>Revenue: $%{y:,.0f}<extra></extra>`,
+        text: monthLabels
     };
 
     const trendTrace = {
-        x: xValues,  // Use numeric values instead of strings
+        x: xValues,
         y: trendData,
         type: "scatter",
         mode: "lines+markers",
@@ -100,27 +93,27 @@ function renderSalesChart(elementId, salesData) {
             size: 6,
             symbol: "circle"
         },
-        hovertemplate: 'Month: %{text}<br>Trend: $%{y:,.0f}<extra></extra>',
-        text: monthLabels  // Store month names for hover
+        hovertemplate: `Month: %{text} ${currentYear}<br>Trend: $%{y:,.0f}<extra></extra>`,
+        text: monthLabels
     };
 
     const layout = {
         ...chartTheme,
         title: {
-            text: "12-Month Sales Forecast",
+            text: `${currentYear} Sales Forecast`,
             font: { color: colors.cyan, size: 16 }
         },
         xaxis: {
-            title: { text: "Month", font: { color: colors.muted } },
+            title: { text: `Month (${currentYear})`, font: { color: colors.muted } },
             tickmode: "array",
-            tickvals: xValues,  // Use numeric positions
-            ticktext: monthLabels,  // Display month names
+            tickvals: xValues,
+            ticktext: monthLabels,
             tickangle: 0,
             tickfont: { size: 11, color: colors.white },
             gridcolor: "rgba(255, 255, 255, 0.1)",
             linecolor: "rgba(255, 255, 255, 0.1)",
             zerolinecolor: "rgba(255, 255, 255, 0.1)",
-            range: [-0.5, xValues.length - 0.5]  // Add padding
+            range: [-0.5, xValues.length - 0.5]
         },
         yaxis: {
             title: { text: "Revenue (USD)", font: { color: colors.muted } },
@@ -145,7 +138,7 @@ function renderSalesChart(elementId, salesData) {
         modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
     };
 
-    // Clear the element completely before plotting
+    // Clear and plot
     const element = document.getElementById(elementId);
     if (element) {
         element.innerHTML = '';
