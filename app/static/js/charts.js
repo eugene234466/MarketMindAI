@@ -60,19 +60,27 @@ function renderSalesChart(elementId, salesData) {
                 `rgba(0,229,255,${0.4 + i * 0.05})`
             ),
             line: { color: colors.cyan, width: 1 }
-        }
+        },
+        text: revenueData.map(value => `$${value.toLocaleString()}`),
+        textposition: "auto",
+        textfont: { color: colors.white }
     };
 
     const trendTrace = {
         x: salesData.months,
         y: trendData,
         type: "scatter",
-        mode: "lines",
+        mode: "lines+markers",
         name: "Trend",
         line: {
             color: colors.green,
-            width: 2,
-            dash: "dot"
+            width: 3,
+            shape: "spline"
+        },
+        marker: {
+            color: colors.green,
+            size: 6,
+            symbol: "circle"
         }
     };
 
@@ -80,26 +88,38 @@ function renderSalesChart(elementId, salesData) {
         ...chartTheme,
         title: {
             text: "12-Month Revenue Forecast",
-            font: { color: colors.cyan }
+            font: { color: colors.cyan, size: 16 }
         },
         xaxis: {
             ...chartTheme.xaxis,
             title: { text: "Month", font: { color: colors.muted } },
-            type: "category" // 🔥 fixes Jan 2000 issue
+            type: "category",
+            tickangle: -45,
+            tickfont: { size: 10 }
         },
         yaxis: {
             ...chartTheme.yaxis,
             title: { text: "Revenue (USD)", font: { color: colors.muted } },
             tickprefix: "$",
+            tickformat: ",.0f",
             rangemode: "tozero",
-            range: [0, Math.max(...revenueData) * 1.2]
-        }
+            range: [0, Math.max(...revenueData, ...trendData) * 1.15],
+            gridcolor: "rgba(255, 255, 255, 0.15)"
+        },
+        bargap: 0.2,
+        bargroupgap: 0.1,
+        hovermode: "closest",
+        plot_bgcolor: "rgba(0, 0, 0, 0.2)"
     };
 
-    Plotly.newPlot(elementId, [revenueTrace, trendTrace], layout, {
+    const config = {
         responsive: true,
-        displayModeBar: false
-    });
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+    };
+
+    Plotly.newPlot(elementId, [revenueTrace, trendTrace], layout, config);
 }
 
 
