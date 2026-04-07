@@ -99,7 +99,7 @@ function renderTrendsChart(elementId, trendsData) {
 /* ── 4. SALES FORECAST CHART ────────────────────────────────*/
 function renderSalesChart(elementId, salesData) {
 
-    // 🔥 FIX: Ensure numeric values
+    // 🔥 Ensure numeric values (no mutation of original data)
     const revenueData = salesData.revenue.map(v => Number(v));
     const trendData   = salesData.trend.map(v => Number(v));
 
@@ -137,13 +137,14 @@ function renderSalesChart(elementId, salesData) {
         },
         xaxis: {
             ...chartTheme.xaxis,
-            title: { text: "Month", font: { color: colors.muted } }
+            title: { text: "Month", font: { color: colors.muted } },
+            type: "category" // 🔥 FIX: prevents "Jan 2000" issue
         },
         yaxis: {
             ...chartTheme.yaxis,
             title: { text: "Revenue (USD)", font: { color: colors.muted } },
             tickprefix: "$",
-            rangemode: "tozero" // 🔥 ensures proper bar scaling
+            rangemode: "tozero" // 🔥 ensures bars start from 0
         },
         barmode: "group"
     };
