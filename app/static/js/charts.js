@@ -50,23 +50,25 @@ function renderSalesChart(elementId, salesData) {
     const revenueData = salesData.revenue.map(Number);
     const trendData   = salesData.trend.map(Number);
     
-    // CRITICAL FIX: Remove years from month labels (e.g., "Jan 2000" -> "Jan")
-    const monthLabels = salesData.months.map(month => {
-        // Convert to string and remove any 4-digit year
-        let cleanMonth = String(month);
-        // Remove patterns like " 2000", " 2001", etc.
-        cleanMonth = cleanMonth.replace(/\s+\d{4}/g, '');
-        // Also handle if there's a comma: "Jan, 2000" -> "Jan"
-        cleanMonth = cleanMonth.replace(/,\s*\d{4}/g, '');
-        // Take only first 3 characters to ensure it's just the month abbreviation
-        return cleanMonth.substring(0, 3);
+    // FORCEFUL FIX: Create clean month labels as simple strings (1,2,3... or Jan,Feb,Mar...)
+    // Method 1: Use sequential numbers (most reliable)
+    const monthLabels = salesData.months.map((_, index) => {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        // Use index to get proper month if we have 12 months
+        if (salesData.months.length === 12) {
+            return months[index % 12];
+        }
+        // Otherwise extract just the month name without year
+        let monthStr = String(_);
+        monthStr = monthStr.replace(/\d{4}/g, '').replace(/\s+/g, '').replace(/,/g, '');
+        return monthStr.substring(0, 3);
     });
 
-    console.log('Original months:', salesData.months);
-    console.log('Cleaned months:', monthLabels);
+    // Create numeric x values (0,1,2,3...) to prevent any date parsing
+    const xValues = monthLabels.map((_, i) => i);
 
     const revenueTrace = {
-        x: monthLabels,
+        x: xValues,  // Use numeric values instead of strings
         y: revenueData,
         type: "bar",
         name: "Revenue",
@@ -79,11 +81,12 @@ function renderSalesChart(elementId, salesData) {
         text: revenueData.map(value => `$${value.toLocaleString()}`),
         textposition: "auto",
         textfont: { color: colors.white, size: 10 },
-        hovertemplate: 'Month: %{x}<br>Revenue: $%{y:,.0f}<extra></extra>'
+        hovertemplate: 'Month: %{text}<br>Revenue: $%{y:,.0f}<extra></extra>',
+        text: monthLabels  // Store month names for hover
     };
 
     const trendTrace = {
-        x: monthLabels,
+        x: xValues,  // Use numeric values instead of strings
         y: trendData,
         type: "scatter",
         mode: "lines+markers",
@@ -97,7 +100,8 @@ function renderSalesChart(elementId, salesData) {
             size: 6,
             symbol: "circle"
         },
-        hovertemplate: 'Month: %{x}<br>Trend: $%{y:,.0f}<extra></extra>'
+        hovertemplate: 'Month: %{text}<br>Trend: $%{y:,.0f}<extra></extra>',
+        text: monthLabels  // Store month names for hover
     };
 
     const layout = {
@@ -108,15 +112,15 @@ function renderSalesChart(elementId, salesData) {
         },
         xaxis: {
             title: { text: "Month", font: { color: colors.muted } },
-            type: "category",
+            tickmode: "array",
+            tickvals: xValues,  // Use numeric positions
+            ticktext: monthLabels,  // Display month names
             tickangle: 0,
             tickfont: { size: 11, color: colors.white },
-            tickmode: "array",
-            tickvals: monthLabels,
-            ticktext: monthLabels,
             gridcolor: "rgba(255, 255, 255, 0.1)",
             linecolor: "rgba(255, 255, 255, 0.1)",
-            zerolinecolor: "rgba(255, 255, 255, 0.1)"
+            zerolinecolor: "rgba(255, 255, 255, 0.1)",
+            range: [-0.5, xValues.length - 0.5]  // Add padding
         },
         yaxis: {
             title: { text: "Revenue (USD)", font: { color: colors.muted } },
@@ -130,7 +134,7 @@ function renderSalesChart(elementId, salesData) {
         },
         bargap: 0.2,
         bargroupgap: 0.1,
-        hovermode: "x unified",
+        hovermode: "closest",
         plot_bgcolor: "rgba(0, 0, 0, 0.2)"
     };
 
@@ -141,6 +145,12 @@ function renderSalesChart(elementId, salesData) {
         modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
     };
 
+    // Clear the element completely before plotting
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.innerHTML = '';
+    }
+    
     Plotly.newPlot(elementId, [revenueTrace, trendTrace], layout, config);
 }
 
