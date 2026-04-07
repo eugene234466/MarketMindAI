@@ -50,26 +50,20 @@ function renderSalesChart(elementId, salesData) {
     const revenueData = salesData.revenue.map(Number);
     const trendData   = salesData.trend.map(Number);
     
-    // CRITICAL FIX: Extract only the month name (first 3 characters) from any date format
+    // CRITICAL FIX: Remove years from month labels (e.g., "Jan 2000" -> "Jan")
     const monthLabels = salesData.months.map(month => {
-        // If it's a string that contains a date
-        if (typeof month === 'string') {
-            // Try to extract just the month abbreviation (Jan, Feb, etc.)
-            const monthMatch = month.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
-            if (monthMatch) {
-                return monthMatch[0]; // Return just the month abbreviation
-            }
-            // If no month abbreviation found, return as-is but ensure it's a string
-            return String(month);
-        }
-        // If it's a Date object
-        if (month instanceof Date) {
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            return months[month.getMonth()];
-        }
-        // Fallback: convert to string and take first 3 characters
-        return String(month).substring(0, 3);
+        // Convert to string and remove any 4-digit year
+        let cleanMonth = String(month);
+        // Remove patterns like " 2000", " 2001", etc.
+        cleanMonth = cleanMonth.replace(/\s+\d{4}/g, '');
+        // Also handle if there's a comma: "Jan, 2000" -> "Jan"
+        cleanMonth = cleanMonth.replace(/,\s*\d{4}/g, '');
+        // Take only first 3 characters to ensure it's just the month abbreviation
+        return cleanMonth.substring(0, 3);
     });
+
+    console.log('Original months:', salesData.months);
+    console.log('Cleaned months:', monthLabels);
 
     const revenueTrace = {
         x: monthLabels,
@@ -84,7 +78,8 @@ function renderSalesChart(elementId, salesData) {
         },
         text: revenueData.map(value => `$${value.toLocaleString()}`),
         textposition: "auto",
-        textfont: { color: colors.white, size: 10 }
+        textfont: { color: colors.white, size: 10 },
+        hovertemplate: 'Month: %{x}<br>Revenue: $%{y:,.0f}<extra></extra>'
     };
 
     const trendTrace = {
@@ -95,14 +90,14 @@ function renderSalesChart(elementId, salesData) {
         name: "Trend",
         line: {
             color: colors.green,
-            width: 3,
-            shape: "spline"
+            width: 3
         },
         marker: {
             color: colors.green,
             size: 6,
             symbol: "circle"
-        }
+        },
+        hovertemplate: 'Month: %{x}<br>Trend: $%{y:,.0f}<extra></extra>'
     };
 
     const layout = {
@@ -114,7 +109,7 @@ function renderSalesChart(elementId, salesData) {
         xaxis: {
             title: { text: "Month", font: { color: colors.muted } },
             type: "category",
-            tickangle: -45,
+            tickangle: 0,
             tickfont: { size: 11, color: colors.white },
             tickmode: "array",
             tickvals: monthLabels,
@@ -135,7 +130,7 @@ function renderSalesChart(elementId, salesData) {
         },
         bargap: 0.2,
         bargroupgap: 0.1,
-        hovermode: "closest",
+        hovermode: "x unified",
         plot_bgcolor: "rgba(0, 0, 0, 0.2)"
     };
 
@@ -143,7 +138,7 @@ function renderSalesChart(elementId, salesData) {
         responsive: true,
         displayModeBar: true,
         displaylogo: false,
-        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+        modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
     };
 
     Plotly.newPlot(elementId, [revenueTrace, trendTrace], layout, config);
