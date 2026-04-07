@@ -49,25 +49,28 @@ function renderSalesChart(elementId, salesData) {
 
     const revenueData = salesData.revenue.map(Number);
     const trendData   = salesData.trend.map(Number);
+    
+    // Ensure months are treated as strings, not dates
+    const monthLabels = salesData.months.map(month => String(month));
 
     const revenueTrace = {
-        x: salesData.months,
+        x: monthLabels,
         y: revenueData,
         type: "bar",
         name: "Revenue",
         marker: {
-            color: salesData.months.map((_, i) =>
+            color: monthLabels.map((_, i) =>
                 `rgba(0,229,255,${0.4 + i * 0.05})`
             ),
             line: { color: colors.cyan, width: 1 }
         },
         text: revenueData.map(value => `$${value.toLocaleString()}`),
         textposition: "auto",
-        textfont: { color: colors.white }
+        textfont: { color: colors.white, size: 10 }
     };
 
     const trendTrace = {
-        x: salesData.months,
+        x: monthLabels,
         y: trendData,
         type: "scatter",
         mode: "lines+markers",
@@ -93,9 +96,12 @@ function renderSalesChart(elementId, salesData) {
         xaxis: {
             ...chartTheme.xaxis,
             title: { text: "Month", font: { color: colors.muted } },
-            type: "category",
+            type: "category",  // Forces categorical axis, NOT date/time
             tickangle: -45,
-            tickfont: { size: 10 }
+            tickfont: { size: 10, color: colors.white },
+            tickmode: "array",
+            tickvals: monthLabels,
+            ticktext: monthLabels
         },
         yaxis: {
             ...chartTheme.yaxis,
