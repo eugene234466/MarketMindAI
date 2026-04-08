@@ -211,8 +211,9 @@ def convert_to_revenue(forecast: list, market_data: dict) -> list:
 
 def generate_month_labels() -> list:
     now = datetime.now()
-    return [(now + timedelta(days=30 * i)).strftime("%b %Y") for i in range(1, 13)]
-
+    return [now.strftime("%b %Y")] + [
+        (now + timedelta(days=30 * i)).strftime("%b %Y") for i in range(1, 12)
+    ]
 
 # ── 9. TREND LINE ────────────────────────────────────────────
 
