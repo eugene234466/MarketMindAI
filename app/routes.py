@@ -47,7 +47,7 @@ def login():
     if "user_id" in session:
         return redirect(url_for("main.index"))
     if request.method == "POST":
-        email = request.form.get("email", "").strip()
+        email    = request.form.get("email", "").strip()
         password = request.form.get("password", "")
         if not email or not password:
             flash("Please fill in all fields", "danger")
@@ -56,8 +56,8 @@ def login():
         if not user or not verify_password(password, user["password"]):
             flash("Incorrect email or password", "danger")
             return redirect(url_for("main.login"))
-        session["user_id"] = user["id"]
-        session["user_name"] = user["name"]
+        session["user_id"]    = user["id"]
+        session["user_name"]  = user["name"]
         session["user_email"] = user["email"]
         flash(f"Welcome back, {user['name']}!", "success")
         return redirect(url_for("main.index"))
@@ -70,12 +70,12 @@ def register():
     if "user_id" in session:
         return redirect(url_for("main.index"))
     if request.method == "POST":
-        first = request.form.get("first_name", "").strip()
-        last = request.form.get("last_name", "").strip()
-        name = f"{first} {last}".strip()
-        email = request.form.get("email", "").strip()
-        pw = request.form.get("password", "")
-        pw2 = request.form.get("confirm_password", "")
+        first  = request.form.get("first_name", "").strip()
+        last   = request.form.get("last_name",  "").strip()
+        name   = f"{first} {last}".strip()
+        email  = request.form.get("email",    "").strip()
+        pw     = request.form.get("password", "")
+        pw2    = request.form.get("confirm_password", "")
         if not name or not email or not pw:
             flash("Please fill in all fields", "danger")
             return redirect(url_for("main.register"))
@@ -90,8 +90,8 @@ def register():
             return redirect(url_for("main.login"))
         user_id = create_user(name, email, pw)
         if user_id:
-            session["user_id"] = user_id
-            session["user_name"] = name
+            session["user_id"]    = user_id
+            session["user_name"]  = name
             session["user_email"] = email
             flash(f"Welcome to MarketMind AI, {first}!", "success")
             return redirect(url_for("main.index"))
@@ -120,7 +120,7 @@ def index():
 @main.route("/analyze", methods=["POST"])
 @login_required
 def analyze():
-    idea = request.form.get("idea", "").strip()
+    idea    = request.form.get("idea", "").strip()
     user_id = session["user_id"]
 
     if not idea:
@@ -144,8 +144,8 @@ def analyze():
 @login_required
 def analyze_run():
     try:
-        data = request.get_json(silent=True) or {}
-        idea = data.get("idea") or session.pop("pending_idea", "")
+        data    = request.get_json(silent=True) or {}
+        idea    = data.get("idea") or session.pop("pending_idea", "")
         user_id = session["user_id"]
 
         if not idea:
@@ -158,15 +158,14 @@ def analyze_run():
             error_msg = None
             try:
                 from core.analyze import run_pipeline
-                results = run_pipeline(idea)
+                results     = run_pipeline(idea)
                 set_cache(idea, results)
                 research_id = save_research(results, user_id)
                 increment_usage(user_id)
                 complete_job(job_id, research_id)
                 return
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                import traceback; traceback.print_exc()
                 error_msg = str(e) or "Unknown pipeline error"
 
             for attempt in range(3):
@@ -175,16 +174,14 @@ def analyze_run():
                     return
                 except Exception as fe:
                     print(f"[job {job_id}] fail_job attempt {attempt+1} error: {fe}")
-                    import time
-                    time.sleep(1)
+                    import time; time.sleep(1)
             print(f"[job {job_id}] Could not write failure to DB after 3 attempts")
 
         threading.Thread(target=run, args=(idea, user_id, job_id), daemon=True).start()
         return jsonify({"job_id": job_id})
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
@@ -235,9 +232,9 @@ def dashboard():
 def report():
     try:
         from core.report_generator import generate_pdf
-        idea = request.form.get("idea", "")
+        idea    = request.form.get("idea", "")
         results = json.loads(request.form.get("results", "{}"))
-        path = generate_pdf(idea, results)
+        path    = generate_pdf(idea, results)
         if not path:
             return jsonify({"error": "PDF generation failed"}), 500
         filename = os.path.basename(path)
@@ -281,12 +278,12 @@ def niche_detail(research_id):
 def email_report():
     try:
         from core.report_generator import generate_pdf
-        from core.email_sender import send_report
+        from core.email_sender     import send_report
         recipient = request.form.get("email")
-        idea = request.form.get("idea")
-        results = json.loads(request.form.get("results", "{}"))
-        pdf_path = generate_pdf(idea, results)
-        success = send_report(recipient, idea, pdf_path, results)
+        idea      = request.form.get("idea")
+        results   = json.loads(request.form.get("results", "{}"))
+        pdf_path  = generate_pdf(idea, results)
+        success   = send_report(recipient, idea, pdf_path, results)
         return jsonify({"success": True} if success else {"error": "Email failed"}), 200 if success else 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -312,13 +309,6 @@ def view_research(research_id):
         if not results:
             flash("Research not found", "warning")
             return redirect(url_for("main.history"))
-
-        # Always regenerate month labels so cached results show current dates
-        if results.get("sales_forecast") and results["sales_forecast"].get("revenue"):
-            from core.sales_predictor import generate_month_labels
-            results["sales_forecast"]["months"] = generate_month_labels()
-        
-        return render_template("research.html", research=results)
     except Exception as e:
         print(f"[view_research] {e}")
         return redirect(url_for("main.history"))
@@ -361,7 +351,7 @@ def forgot_password():
             import secrets
             from database.db import create_reset_token
             from core.email_sender import send_reset_email
-            token = secrets.token_urlsafe(32)
+            token     = secrets.token_urlsafe(32)
             reset_url = request.host_url.rstrip("/") + url_for("main.reset_password", token=token)
             create_reset_token(user["id"], token)
             send_reset_email(email, reset_url)
@@ -381,7 +371,7 @@ def reset_password(token):
         flash("This reset link is invalid or has expired. Please request a new one.", "danger")
         return redirect(url_for("main.forgot_password"))
     if request.method == "POST":
-        pw = request.form.get("password", "")
+        pw  = request.form.get("password", "")
         pw2 = request.form.get("confirm_password", "")
         if len(pw) < 6:
             flash("Password must be at least 6 characters.", "danger")
