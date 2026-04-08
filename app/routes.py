@@ -309,8 +309,11 @@ def view_research(research_id):
         if not results:
             flash("Research not found", "warning")
             return redirect(url_for("main.history"))
-        return render_template("dashboard.html", results=results,
-                               can_pdf=True, can_email=True)
+
+        # Always regenerate month labels so cached results show current dates
+        if results.get("sales_forecast") and results["sales_forecast"].get("revenue"):
+            from core.sales_predictor import generate_month_labels
+            results["sales_forecast"]["months"] = generate_month_labels(
     except Exception as e:
         print(f"[view_research] {e}")
         return redirect(url_for("main.history"))
