@@ -26,16 +26,16 @@ def predict_sales(market_data: dict) -> dict:
             forecast = growth_curve_forecast(market_data)
 
         revenue = convert_to_revenue(forecast, market_data)
-        months = generate_month_labels()
+        months  = generate_month_labels()
 
         return {
-            "months": months,
-            "revenue": revenue,
-            "trend": calculate_trend_line(revenue),
-            "total_year": sum(revenue),
-            "peak_month": get_peak_month(revenue, months),
+            "months"     : months,
+            "revenue"    : revenue,
+            "trend"      : calculate_trend_line(revenue),
+            "total_year" : sum(revenue),
+            "peak_month" : get_peak_month(revenue, months),
             "growth_rate": calculate_growth_rate(revenue),
-            "summary": generate_forecast_summary(revenue),
+            "summary"    : generate_forecast_summary(revenue),
         }
 
     except Exception as e:
@@ -50,15 +50,15 @@ def polynomial_forecast(values: list, degree: int = 3) -> list:
         X = np.array(range(len(values))).reshape(-1, 1)
         y = np.array(values, dtype=float)
 
-        poly = PolynomialFeatures(degree=degree)
+        poly   = PolynomialFeatures(degree=degree)
         X_poly = poly.fit_transform(X)
 
-        model = LinearRegression()
+        model  = LinearRegression()
         model.fit(X_poly, y)
 
-        future_X = np.array(range(len(values), len(values) + 12)).reshape(-1, 1)
+        future_X      = np.array(range(len(values), len(values) + 12)).reshape(-1, 1)
         future_X_poly = poly.transform(future_X)
-        predictions = model.predict(future_X_poly).tolist()
+        predictions   = model.predict(future_X_poly).tolist()
 
         predictions = _apply_seasonality(predictions)
         return [max(0.0, min(100.0, p)) for p in predictions]
@@ -81,7 +81,7 @@ def linear_forecast(values: list) -> list:
         model = LinearRegression()
         model.fit(X, y)
 
-        future_X = np.array(range(len(values), len(values) + 12)).reshape(-1, 1)
+        future_X    = np.array(range(len(values), len(values) + 12)).reshape(-1, 1)
         predictions = model.predict(future_X).tolist()
         predictions = _apply_seasonality(predictions)
 
@@ -98,13 +98,13 @@ def growth_curve_forecast(market_data: dict) -> list:
     competition = market_data.get("competition_level", "Medium")
     trend_score = float(market_data.get("trend_score", 5))
 
-    base = 20 + trend_score * 3
-    growth_rate = {"High": 0.06, "Medium": 0.09, "Low": 0.14}.get(competition, 0.08)
+    base   = 20 + trend_score * 3
+    growth = {"High": 0.06, "Medium": 0.09, "Low": 0.14}.get(competition, 0.08)
 
     curve = []
     v = base
     for _ in range(12):
-        v = v * (1 + growth_rate)
+        v = v * (1 + growth)
         curve.append(max(0.0, min(100.0, v)))
     return curve
 
@@ -149,7 +149,7 @@ def _parse_market_size(market_size: str) -> float:
             return float(num.group(1)) * 1e12 if num else None
         return None
 
-    value = float(match.group(1))
+    value  = float(match.group(1))
     suffix = match.group(2)
 
     multipliers = {"T": 1e12, "B": 1e9, "M": 1e6, "K": 1e3}
@@ -167,19 +167,19 @@ def convert_to_revenue(forecast: list, market_data: dict) -> list:
     """
     try:
         market_size_str = market_data.get("market_size", "N/A")
-        competition = market_data.get("competition_level", "Medium")
-        trend_score = float(market_data.get("trend_score", 5))
+        competition     = market_data.get("competition_level", "Medium")
+        trend_score     = float(market_data.get("trend_score", 5))
 
         market_value = _parse_market_size(market_size_str)
 
         if market_value:
             # Realistic startup capture rate: 0.00001% to 0.0005% of TAM
             capture_rates = {"Low": 0.000005, "Medium": 0.000002, "High": 0.000001}
-            capture = capture_rates.get(competition, 0.000002)
+            capture       = capture_rates.get(competition, 0.000002)
             annual_target = market_value * capture
 
             # Trend score boosts the base (score 1-10 → 0.5x to 1.5x)
-            trend_factor = 0.5 + (trend_score / 10)
+            trend_factor  = 0.5 + (trend_score / 10)
             annual_target = annual_target * trend_factor
 
             # Clamp to a believable startup range: $10k - $2M / year
@@ -187,11 +187,11 @@ def convert_to_revenue(forecast: list, market_data: dict) -> list:
         else:
             # Fallback: simple range based on competition + trend
             base_annual = {
-                "Low": 150_000,
-                "Medium": 80_000,
-                "High": 40_000,
+                "Low":    150_000,
+                "Medium":  80_000,
+                "High":    40_000,
             }.get(competition, 80_000)
-            trend_factor = 0.5 + (trend_score / 10)
+            trend_factor  = 0.5 + (trend_score / 10)
             annual_target = base_annual * trend_factor
 
         # Distribute across 12 months using the forecast shape (0-100 scores)
@@ -209,18 +209,11 @@ def convert_to_revenue(forecast: list, market_data: dict) -> list:
 
 # ── 8. MONTH LABELS ──────────────────────────────────────────
 
-def view_research(research_id):
-    try:
-        results = get_research_by_id(research_id)
-        if not results:
-            flash("Research not found", "warning")
-            return redirect(url_for("main.history"))
-
-        # Always regenerate month labels so cached results show current dates
-        if results.get("sales_forecast") and results["sales_forecast"].get("revenue"):
-            from core.sales_predictor import generate_month_labels
-            results["sales_forecast"]["months"] = generate_month_labels()
-
+def generate_month_labels() -> list:
+    now = datetime.now()
+    return [now.strftime("%b %Y")] + [
+        (now + timedelta(days=30 * i)).strftime("%b %Y") for i in range(1, 12)
+    ]
 
 # ── 9. TREND LINE ────────────────────────────────────────────
 
@@ -261,9 +254,9 @@ def calculate_growth_rate(revenue: list) -> str:
 def generate_forecast_summary(revenue: list) -> str:
     try:
         months = generate_month_labels()
-        total = sum(revenue)
+        total  = sum(revenue)
         growth = calculate_growth_rate(revenue)
-        peak = get_peak_month(revenue, months)
+        peak   = get_peak_month(revenue, months)
         return (
             f"Projected annual revenue of ${total:,} "
             f"with {growth} growth. "
@@ -276,14 +269,14 @@ def generate_forecast_summary(revenue: list) -> str:
 # ── 13. FALLBACK ─────────────────────────────────────────────
 
 def get_fallback_forecast() -> dict:
-    months = generate_month_labels()
+    months  = generate_month_labels()
     revenue = [round(5_000 * (1 + 0.08 * i)) for i in range(12)]
     return {
-        "months": months,
-        "revenue": revenue,
-        "trend": calculate_trend_line(revenue),
-        "total_year": sum(revenue),
-        "peak_month": months[-1],
+        "months"     : months,
+        "revenue"    : revenue,
+        "trend"      : calculate_trend_line(revenue),
+        "total_year" : sum(revenue),
+        "peak_month" : months[-1],
         "growth_rate": "+88%",
-        "summary": "Forecast based on estimated market data.",
+        "summary"    : "Forecast based on estimated market data.",
     }
