@@ -209,12 +209,17 @@ def convert_to_revenue(forecast: list, market_data: dict) -> list:
 
 # ── 8. MONTH LABELS ──────────────────────────────────────────
 
-def generate_month_labels() -> list:
-    now = datetime.now()
-    months = [now.strftime("%b %Y")]
-    for i in range(1, 12):
-        months.append((now + timedelta(days=30 * i)).strftime("%b %Y"))
-    return months
+def view_research(research_id):
+    try:
+        results = get_research_by_id(research_id)
+        if not results:
+            flash("Research not found", "warning")
+            return redirect(url_for("main.history"))
+
+        # Always regenerate month labels so cached results show current dates
+        if results.get("sales_forecast") and results["sales_forecast"].get("revenue"):
+            from core.sales_predictor import generate_month_labels
+            results["sales_forecast"]["months"] = generate_month_labels()
 
 
 # ── 9. TREND LINE ────────────────────────────────────────────
