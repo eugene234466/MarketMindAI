@@ -309,6 +309,8 @@ def view_research(research_id):
         if not results:
             flash("Research not found", "warning")
             return redirect(url_for("main.history"))
+        return render_template("dashboard.html", results=results,
+                               can_pdf=True, can_email=True)
     except Exception as e:
         print(f"[view_research] {e}")
         return redirect(url_for("main.history"))
