@@ -207,12 +207,20 @@ def convert_to_revenue(forecast: list, market_data: dict) -> list:
         return [round(5_000 * (1 + 0.08 * i)) for i in range(12)]
 
 
-# ── 8. MONTH LABELS ──────────────────────────────────────────
+# ── 8. MONTH LABELS (FIXED FOR CORRECT YEAR) ─────────────────
 
 def generate_month_labels() -> list:
     now = datetime.now()
-    # FIXED: Generate all 12 months starting from current month (index 0-11)
-    return [(now + timedelta(days=30 * i)).strftime("%b %Y") for i in range(12)]
+    months = []
+    for i in range(12):
+        # Calculate month offset from current month
+        month_offset = now.month + i
+        year = now.year + ((month_offset - 1) // 12)
+        month = ((month_offset - 1) % 12) + 1
+        # Create date using the 1st of the month
+        current_date = datetime(year, month, 1)
+        months.append(current_date.strftime("%b %Y"))
+    return months
 
 
 # ── 9. TREND LINE ────────────────────────────────────────────
