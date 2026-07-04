@@ -28,3 +28,4 @@ flask-limiter>=3.5.0
 # ── Performance ────────────────────────────────────────────────
 flask-compress>=1.14
 redis>=5.0.0
+psycopg2
