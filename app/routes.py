@@ -27,6 +27,8 @@ def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user_id" not in session:
+            if request.method != "GET":
+                return jsonify({"error": "Session expired. Please log in again."}), 401
             flash("Please log in to continue", "warning")
             return redirect(url_for("main.login"))
         return f(*args, **kwargs)
