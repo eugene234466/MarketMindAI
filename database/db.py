@@ -122,6 +122,27 @@ def init_db():
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
             """)
+            cur.execute("""
+CREATE TABLE IF NOT EXISTS evidence (
+    id              SERIAL PRIMARY KEY,
+    analysis_id     INTEGER,           -- links to research.id
+    claim           TEXT,              -- what this evidence supports
+    source_name     TEXT NOT NULL,     -- e.g. "GNews" "OpenStreetMap"
+    source_url      TEXT,
+    source_type     TEXT,              -- "search"|"news"|"company"|"geographic"|"research"
+    geography       TEXT,
+    topic           TEXT,
+    published_at    TIMESTAMPTZ,
+    retrieved_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    raw_value       TEXT,              -- original snippet/content
+    reliability     TEXT,             -- "observed"|"inferred"|"assumed"|"unknown"
+    limitations     TEXT,
+    content_hash    TEXT               -- MD5 of url+snippet for dedup
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_analysis_id ON evidence(analysis_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_content_hash ON evidence(content_hash);
+""")
             cur.execute("DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '1 hour';")
             cur.execute("DELETE FROM password_reset_tokens WHERE expires_at < NOW();")
     print("[DB] Tables ready.")
