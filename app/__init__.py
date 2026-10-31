@@ -18,5 +18,8 @@ def create_app():
     # Register routes blueprint
     from app.routes import main
     app.register_blueprint(main)
+    
+    from core.bootstrap import register_all
+    register_all()
 
     return app
