@@ -1,11 +1,18 @@
-# IMPORTS
+# ============================================================
+# CORE/PROVIDERS/BASE.PY — Provider interfaces + normalized result
+# ============================================================
+import hashlib
 from abc import ABC, abstractmethod
-from datetime import datetime
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 
-# ── NORMALIZED RESULT ─────────────────────────────────────────
-# Every provider returns this — no matter the source
+
+def make_content_hash(url: str, snippet: str) -> str:
+    """Stable fingerprint used to deduplicate evidence."""
+    return hashlib.md5(((url or "") + (snippet or "")).encode("utf-8")).hexdigest()
+
+
 @dataclass
 class ProviderResult:
     # What was found
@@ -15,109 +22,72 @@ class ProviderResult:
 
     # Where it came from
     source_name: str
-    source_type: str        # "search" | "news" | "company" | "geographic" | "research"
-
-    # When
+    source_type: str  # "search" | "news" | "company" | "geographic" | "research"
     retrieved_at: datetime
-    published_at: Optional[datetime]
 
-    # Context
-    geography: Optional[str]
-    topic: Optional[str]
+    # Optional context
+    published_at: Optional[datetime] = None
+    geography: Optional[str] = None
+    topic: Optional[str] = None
+    limitations: Optional[str] = None
 
-    # Reliability
-    limitations: Optional[str]
+    # Original response + content_hash, kept for debugging and dedup
+    raw: dict = field(default_factory=dict)
 
-    # Raw original response stored for debugging
-    raw: Optional[dict] = field(default_factory=dict)
+    @property
+    def content_hash(self) -> Optional[str]:
+        return self.raw.get("content_hash")
 
 
-# ── BASE PROVIDER ─────────────────────────────────────────────
-# All providers inherit from this
 class BaseProvider(ABC):
-
     def __init__(self, config: dict):
-        # Store config (api_key, limits, enabled flag etc)
-        # Raise ValueError if required keys are missing
-        pass
+        if not isinstance(config, dict):
+            raise ValueError("Provider config must be a dict")
+        self.config = config
+        self._enabled = bool(config.get("enabled", True))
 
     @property
     @abstractmethod
     def name(self) -> str:
-        # Return provider name e.g. "zenserp" "gnews" "openstreetmap"
-        pass
+        """Short provider id, e.g. 'gnews'."""
 
     @property
     def enabled(self) -> bool:
-        # Check config for enabled flag
-        # Return True by default
-        pass
+        return self._enabled
 
     def _check_enabled(self):
-        # If not enabled raise a RuntimeError with a clear message
-        pass
+        if not self.enabled:
+            raise RuntimeError(f"Provider '{self.name}' is disabled")
 
 
-# ── SEARCH PROVIDER ───────────────────────────────────────────
 class SearchProvider(BaseProvider):
-
     @abstractmethod
-    def search(
-        self,
-        query: str,
-        geography: Optional[str] = None,
-        limit: int = 10
-    ) -> list[ProviderResult]:
-        # Subclasses implement this
-        # Must return list of ProviderResult
-        # Must handle timeouts and HTTP errors — never raise to caller
-        # Must respect limit
-        pass
+    def search(self, query: str, geography: Optional[str] = None,
+               limit: int = 10) -> list:
+        """Return list[ProviderResult]. Must never raise to the caller."""
 
 
-# ── NEWS PROVIDER ─────────────────────────────────────────────
 class NewsProvider(BaseProvider):
-
     @abstractmethod
-    def search_news(
-        self,
-        query: str,
-        geography: Optional[str] = None,
-        limit: int = 10
-    ) -> list[ProviderResult]:
-        pass
+    def search_news(self, query: str, geography: Optional[str] = None,
+                    limit: int = 10) -> list:
+        """Return list[ProviderResult]. Must never raise to the caller."""
 
 
-# ── COMPANY DATA PROVIDER ─────────────────────────────────────
 class CompanyDataProvider(BaseProvider):
-
     @abstractmethod
-    def search_companies(
-        self,
-        query: str,
-        geography: Optional[str] = None,
-        limit: int = 10
-    ) -> list[ProviderResult]:
+    def search_companies(self, query: str, geography: Optional[str] = None,
+                         limit: int = 10) -> list:
         pass
 
 
-# ── GEOGRAPHIC PROVIDER ───────────────────────────────────────
 class GeographicProvider(BaseProvider):
-
     @abstractmethod
-    def search_places(
-        self,
-        query: str,
-        geography: Optional[str] = None
-    ) -> list[ProviderResult]:
+    def search_places(self, query: str, geography: Optional[str] = None) -> list:
         pass
 
 
-# ── WEBSITE EXTRACTION PROVIDER ───────────────────────────────
 class WebsiteExtractionProvider(BaseProvider):
-
     @abstractmethod
     def extract(self, url: str) -> Optional[ProviderResult]:
-        # Extract title, description, text from a URL
-        # Must validate URL before fetching (SSRF protection goes here)
-        pass
+        """Validate the URL (SSRF protection) before fetching."""

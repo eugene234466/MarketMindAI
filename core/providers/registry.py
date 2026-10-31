@@ -1,36 +1,35 @@
-# IMPORTS
-from core.providers.base import BaseProvider, SearchProvider, NewsProvider
+# ============================================================
+# CORE/PROVIDERS/REGISTRY.PY — One place to find providers
+# ============================================================
+import logging
+from typing import Optional
 
-# ── REGISTRY ──────────────────────────────────────────────────
-# Single place to register and look up all providers
+from core.providers.base import BaseProvider
+
+log = logging.getLogger(__name__)
+
+
 class ProviderRegistry:
-
     def __init__(self):
-        # _providers: dict mapping name -> BaseProvider instance
-        # e.g. {"zenserp": ZenserpProvider, "gnews": GNewsProvider}
-        pass
+        self._providers = {}
 
     def register(self, provider: BaseProvider):
-        # Add provider to _providers by its name
-        # Log registration
-        pass
+        self._providers[provider.name] = provider
+        log.info("Registered provider: %s", provider.name)
 
     def get(self, name: str) -> Optional[BaseProvider]:
-        # Return provider by name
-        # Return None if not found — do not raise
-        pass
+        return self._providers.get(name)
 
-    def get_all(self, provider_type: type) -> list[BaseProvider]:
-        # Return all registered providers of a given type
-        # e.g. get_all(SearchProvider) returns all search providers
-        # Only return enabled ones
-        pass
+    def get_all(self, provider_type: type) -> list:
+        """All ENABLED providers that are instances of provider_type."""
+        return [
+            p for p in self._providers.values()
+            if isinstance(p, provider_type) and p.enabled
+        ]
 
-    def list_registered(self) -> list[str]:
-        # Return list of all registered provider names
-        pass
+    def list_registered(self) -> list:
+        return list(self._providers.keys())
 
 
-# ── SINGLETON ─────────────────────────────────────────────────
-# One global registry used throughout the app
+# One global registry for the whole app
 registry = ProviderRegistry()
