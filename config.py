@@ -25,3 +25,5 @@ class Config:
 
     # ── Paths ──────────────────────────────────────────────
     REPORTS_FOLDER = "reports"
+    
+    GNEWS_API_KEY = os.getenv('GNEWS_API_KEY')
