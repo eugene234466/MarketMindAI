@@ -8,12 +8,13 @@ import psycopg2
 import psycopg2.extras
 from psycopg2.pool import ThreadedConnectionPool
 from contextlib import contextmanager
+from typing import Optional
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-_pool: ThreadedConnectionPool = None
+_pool: Optional[ThreadedConnectionPool] = None
 
 
 def get_pool() -> ThreadedConnectionPool:
@@ -350,3 +351,106 @@ def update_password(user_id: int, new_password: str) -> bool:
     except Exception as e:
         print(f"[DB] update_password error: {e}")
         return False
+
+
+
+# ============================================================
+# DATABASE/DB_ADDITIONS.PY — paste into database/db.py
+# (not a standalone module). Three pieces below.
+# ============================================================
+
+# ── 1. Inside init_db(), with the other cur.execute(...) blocks ──
+#
+#    cur.execute("""
+#        CREATE TABLE IF NOT EXISTS ai_usage (
+#            id            SERIAL PRIMARY KEY,
+#            user_id       INTEGER,
+#            analysis_id   INTEGER,
+#            provider      TEXT NOT NULL,
+#            model         TEXT,
+#            task          TEXT,
+#            input_tokens  INTEGER,
+#            output_tokens INTEGER,
+#            duration_ms   INTEGER,
+#            status        TEXT,
+#            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+#        );
+#    """)
+#    cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at);")
+
+
+# ── 2. save_evidence() ───────────────────────────────────────────
+def save_evidence(evidence_list, analysis_id=None):
+    """Insert ProviderResult objects into the evidence table.
+    Skips duplicates (same content_hash within the same analysis).
+    Never raises: evidence storage must not break the pipeline.
+    Returns the number of rows inserted."""
+    inserted = 0
+    for item in evidence_list or []:
+        try:
+            raw = getattr(item, "raw", None) or {}
+            content_hash = raw.get("content_hash")
+
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    if content_hash:
+                        cur.execute(
+                            "SELECT 1 FROM evidence "
+                            "WHERE content_hash = %s "
+                            "AND analysis_id IS NOT DISTINCT FROM %s LIMIT 1;",
+                            (content_hash, analysis_id),
+                        )
+                        if cur.fetchone():
+                            continue
+
+                    cur.execute(
+                        """
+                        INSERT INTO evidence
+                            (analysis_id, source_name, source_url, source_type,
+                             geography, topic, published_at, retrieved_at,
+                             raw_value, reliability, limitations, content_hash)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                        """,
+                        (
+                            analysis_id,
+                            item.source_name,
+                            item.url,
+                            item.source_type,
+                            item.geography,
+                            item.topic,
+                            item.published_at,
+                            item.retrieved_at,
+                            item.snippet,
+                            "observed",
+                            item.limitations,
+                            content_hash,
+                        ),
+                    )
+                    inserted += 1
+        except Exception as e:
+            print(f"[DB] save_evidence error: {e}")
+            continue
+    return inserted
+
+
+# ── 3. log_ai_usage() ────────────────────────────────────────────
+def log_ai_usage(result, task, status, user_id=None, analysis_id=None):
+    """Record one AI call. Never raises."""
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO ai_usage
+                        (user_id, analysis_id, provider, model, task,
+                         input_tokens, output_tokens, duration_ms, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """,
+                    (
+                        user_id, analysis_id, result.provider, result.model, task,
+                        result.input_tokens, result.output_tokens,
+                        result.duration_ms, status,
+                    ),
+                )
+    except Exception as e:
+        print(f"[DB] log_ai_usage error: {e}")
